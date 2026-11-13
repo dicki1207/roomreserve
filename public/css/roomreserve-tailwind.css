@@ -1,0 +1,638 @@
+/* ==========================================================================
+   RoomReserve — Soft & Refined Professional UI (Eye-Friendly Navy & Soft Slate)
+   ========================================================================== */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    color: #1e293b;
+    background-color: #f1f5f9;
+}
+
+body {
+    min-height: 100vh;
+    background-color: #f1f5f9;
+    color: #1e293b;
+    overflow-x: hidden;
+    font-size: 13.5px;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    background: none;
+}
+
+/* ==========================================================================
+   LAYOUT UTAMA (SIDEBAR SOFT NAVY + KONTEN SLATE LEMBUT)
+   ========================================================================== */
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+.sidebar {
+    width: 250px;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    color: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border-right: 1px solid #334155;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+
+.sidebar-brand {
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-box {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13.5px;
+    color: #ffffff;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(29, 78, 216, 0.28);
+}
+
+.brand-title {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: #f8fafc;
+    letter-spacing: -0.01em;
+}
+
+.brand-sub {
+    font-size: 11.5px;
+    color: #94a3b8;
+}
+
+.nav-section-title {
+    padding: 18px 18px 8px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+}
+
+.nav-list {
+    padding: 0 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #cbd5e1;
+    transition: all 0.15s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.nav-link:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+}
+
+.nav-link.active {
+    background: rgba(59, 130, 246, 0.18);
+    color: #ffffff;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    font-weight: 600;
+}
+
+.nav-pill {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+}
+
+.sidebar-footer {
+    padding: 14px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.user-mini {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.user-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+    color: #bfdbfe;
+    flex-shrink: 0;
+}
+
+.user-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #f1f5f9;
+    line-height: 1.25;
+}
+
+.user-role {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* ==========================================================================
+   MAIN CONTENT AREA & TOPBAR
+   ========================================================================== */
+.main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: #f1f5f9;
+}
+
+.topbar {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #e2e8f0;
+    padding: 13px 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.menu-toggle-btn {
+    display: none;
+    padding: 7px 11px;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #1e293b;
+    border: 1px solid #cbd5e1;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.page-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.content-container {
+    padding: 22px 26px;
+    max-width: 1360px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* ==========================================================================
+   STAT CARDS (LEMBUT & NYAMAN DI MATA)
+   ========================================================================== */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.stat-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 16px 18px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 3px;
+    line-height: 1.15;
+}
+
+.stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #dbeafe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   CARDS, TABLES, BADGES & BUTTONS
+   ========================================================================== */
+.grid-main-side {
+    display: grid;
+    grid-template-columns: 1.9fr 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+.card {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #ffffff;
+}
+
+.card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.card-body {
+    padding: 18px;
+}
+
+.table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+table.rr-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13px;
+}
+
+table.rr-table th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 10px 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+table.rr-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    vertical-align: middle;
+}
+
+table.rr-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Badges yang lembut (tidak hitam pekat/mencolok) */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2.5px 8.5px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-navy { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.badge-royal { background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+.badge-emerald { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.badge-amber { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.badge-rose { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+.badge-cyan { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; }
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.btn-navy {
+    background: #1e3a8a;
+    color: #ffffff;
+}
+.btn-navy:hover {
+    background: #1d4ed8;
+}
+
+.btn-emerald { background: #059669; color: #ffffff; }
+.btn-emerald:hover { background: #047857; }
+
+.btn-rose { background: #e11d48; color: #ffffff; }
+.btn-rose:hover { background: #be123c; }
+
+.btn-slate {
+    background: #ffffff;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+.btn-slate:hover {
+    background: #f8fafc;
+    color: #1e293b;
+}
+
+/* ==========================================================================
+   FORMS & ROOM CARDS
+   ========================================================================== */
+.form-group {
+    margin-bottom: 13px;
+}
+
+.form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 5px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8.5px 12px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 13px;
+    color: #1e293b;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.form-control:focus {
+    background: #ffffff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.room-card {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.item-box {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    background: #f8fafc;
+    margin-bottom: 10px;
+}
+
+.item-box:last-child {
+    margin-bottom: 0;
+}
+
+.item-box.pending {
+    background: #ffffff;
+    border-left: 3px solid #f59e0b;
+}
+
+.reason-box {
+    margin-top: 8px;
+    padding: 9px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+}
+
+.reason-box.rejected {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    color: #9f1239;
+}
+
+.reason-box.approved {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+}
+
+/* ==========================================================================
+   MODALS
+   ========================================================================== */
+.modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-backdrop.show {
+    display: flex;
+}
+
+.modal-card {
+    background: #ffffff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 540px;
+    overflow: hidden;
+    box-shadow: 0 20px 35px rgba(15, 23, 42, 0.15);
+    border: 1px solid #e2e8f0;
+}
+
+.form-row-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+/* ==========================================================================
+   HALAMAN LOGIN YANG NYAMAN DI MATA (SOFT SLATE & NAVY)
+   ========================================================================== */
+.login-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 50%, #e0e7ff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+}
+
+.login-box {
+    width: 100%;
+    max-width: 440px;
+    background: #ffffff;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+
+.login-box-header {
+    background: linear-gradient(135deg, #1e293b 0%, #1e3a8a 100%);
+    padding: 24px 28px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.login-box-body {
+    padding: 26px 28px;
+}
+
+.role-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.role-chip {
+    padding: 7px 8px;
+    border-radius: 7px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #334155;
+    text-align: center;
+    transition: all 0.15s ease;
+}
+
+.role-chip:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   RESPONSIVE MEDIA QUERIES
+   ========================================================================== */
+@media (max-width: 1100px) {
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-main-side { grid-template-columns: 1fr; }
+    .rooms-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+    .app-shell { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: static; display: none; }
+    .sidebar.open { display: flex; }
+    .menu-toggle-btn { display: inline-flex; }
+}
+
+@media (max-width: 580px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    .rooms-grid { grid-template-columns: 1fr; }
+    .form-row-3 { grid-template-columns: 1fr; }
+    .role-chip-grid { grid-template-columns: repeat(2, 1fr); }
+    .content-container { padding: 14px; }
+    .topbar { padding: 12px 14px; }
+}
