@@ -48,7 +48,7 @@ Route::middleware(['auth', 'role:kalab'])->prefix('kalab')->group(function () {
     Route::get('/', [RoomReserveController::class, 'kalabDashboard'])->name('role.kalab');
 });
 
-// 4. Role: BAAK (CRUD Jadwal Kuliah & Ruangan)
+// 4. Role: BAAK (CRUD Jadwal Kuliah, Master Ruangan, & Akun Mahasiswa)
 Route::middleware(['auth', 'role:baak'])->prefix('baak')->group(function () {
     Route::get('/', [RoomReserveController::class, 'baakDashboard'])->name('role.baak');
 
@@ -57,23 +57,30 @@ Route::middleware(['auth', 'role:baak'])->prefix('baak')->group(function () {
     Route::put('/schedules/{id}', [RoomReserveController::class, 'updateSchedule'])->name('baak.schedules.update');
     Route::delete('/schedules/{id}', [RoomReserveController::class, 'destroySchedule'])->name('baak.schedules.destroy');
 
-    // CRUD Master Ruangan
+    // CRUD Master Ruangan & Laboratorium
     Route::post('/rooms', [RoomReserveController::class, 'storeRoom'])->name('baak.rooms.store');
     Route::put('/rooms/{id}', [RoomReserveController::class, 'updateRoom'])->name('baak.rooms.update');
     Route::delete('/rooms/{id}', [RoomReserveController::class, 'destroyRoom'])->name('baak.rooms.destroy');
     Route::post('/rooms/toggle', [RoomReserveController::class, 'toggleRoomStatus'])->name('baak.rooms.toggle');
+    Route::post('/kalab/assign', [RoomReserveController::class, 'assignKalab'])->name('baak.kalab.assign');
+
+    // CRUD Akun Mahasiswa (Dihandle oleh BAAK)
+    Route::post('/students', [RoomReserveController::class, 'storeMahasiswa'])->name('baak.students.store');
+    Route::put('/students/{id}', [RoomReserveController::class, 'updateMahasiswa'])->name('baak.students.update');
+    Route::put('/students/{id}/password', [RoomReserveController::class, 'resetMahasiswaPassword'])->name('baak.students.password');
+    Route::delete('/students/{id}', [RoomReserveController::class, 'destroyMahasiswa'])->name('baak.students.destroy');
 });
 
-// 5. Role: Admin Sistem (CRUD Pengguna & Lab Assignment)
+// 5. Role: Admin Sistem (Hanya Membuat Akun Dosen/Kalab/BAAK & View-Only Status Kelas/Lab)
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/', [RoomReserveController::class, 'adminDashboard'])->name('role.admin');
 
-    // CRUD Users
+    // CRUD Akun Khusus Dosen, Kalab, dan BAAK (Admin dibuat di DB, Mahasiswa dihandle BAAK)
     Route::post('/users', [RoomReserveController::class, 'storeUser'])->name('admin.users.store');
     Route::put('/users/{id}', [RoomReserveController::class, 'updateUser'])->name('admin.users.update');
+    Route::put('/users/{id}/password', [RoomReserveController::class, 'resetStaffPassword'])->name('admin.users.password');
     Route::delete('/users/{id}', [RoomReserveController::class, 'destroyUser'])->name('admin.users.destroy');
 
-    Route::post('/kalab/assign', [RoomReserveController::class, 'assignKalab'])->name('admin.kalab.assign');
     Route::post('/seeder/reset', [RoomReserveController::class, 'resetSeeder'])->name('admin.seeder.reset');
 });
 

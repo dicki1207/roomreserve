@@ -26,6 +26,9 @@
                         </td>
                         <td>
                             <strong>{{ $cs->course_name }}</strong>
+                            @if(!empty($cs->class_name))
+                                <div style="margin-top:3px;"><span class="badge badge-royal">Kelas {{ $cs->class_name }}</span></div>
+                            @endif
                         </td>
                         <td>{{ $cs->lecturer->full_name }}</td>
                         <td><span class="badge badge-royal">Perkuliahan</span></td>

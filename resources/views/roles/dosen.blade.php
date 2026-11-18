@@ -218,6 +218,9 @@
                             <span style="color:#475569; font-size:12px;">{{ $cs->start_time }}–{{ $cs->end_time }}</span>
                         </div>
                         <div style="font-weight:600; color:#1e293b;">{{ $cs->course_name }}</div>
+                        @if(!empty($cs->class_name))
+                            <div style="margin:3px 0;"><span class="badge badge-royal">Kelas {{ $cs->class_name }}</span></div>
+                        @endif
                         <div style="font-size:12px; color:#64748b;">{{ $cs->schedule_date }}</div>
                     </div>
                 @empty

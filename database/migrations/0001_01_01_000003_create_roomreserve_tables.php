@@ -43,6 +43,7 @@ return new class extends Migration
             $table->foreignId('room_id')->constrained('rooms')->cascadeOnDelete();
             $table->foreignId('lecturer_id')->constrained('users')->cascadeOnDelete();
             $table->string('course_name', 150);
+            $table->string('class_name', 60)->nullable();
             $table->date('schedule_date');
             $table->string('start_time', 10);
             $table->string('end_time', 10);
@@ -61,10 +62,10 @@ return new class extends Migration
             $table->timestamp('submitted_at')->nullable();
         });
 
-        // 7. TABEL APPROVALS (Data Persetujuan & Alasan Penolakan Wajib)
+        // 7. TABEL APPROVALS (Data Persetujuan & Alasan Penolakan Wajib — Relasi 1:1 / 1:0..1 terhadap RESERVATIONS)
         Schema::create('approvals', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('reservation_id')->constrained('reservations')->cascadeOnDelete();
+            $table->foreignId('reservation_id')->unique()->constrained('reservations')->cascadeOnDelete();
             $table->foreignId('approver_id')->constrained('users')->cascadeOnDelete();
             $table->string('approver_type', 30); // DOSEN, KALAB, BAAK
             $table->string('decision', 30)->default('MENUNGGU'); // MENUNGGU, DISETUJUI, DITOLAK

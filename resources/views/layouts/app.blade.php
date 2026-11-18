@@ -72,13 +72,17 @@
                             </a>
 
                         @elseif($user->role === 'baak')
+                            <a href="{{ route('role.baak', ['tab' => 'students']) }}"
+                               class="nav-link {{ ($tab ?? '') === 'students' ? 'active' : '' }}">
+                                <span>Data Mahasiswa</span>
+                            </a>
                             <a href="{{ route('role.baak', ['tab' => 'schedules']) }}"
                                class="nav-link {{ ($tab ?? '') === 'schedules' ? 'active' : '' }}">
-                                <span>Jadwal Kuliah GKT</span>
+                                <span>Jadwal Kuliah &amp; Lab</span>
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Data Ruangan</span>
+                                <span>Data Ruangan & Lab</span>
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
@@ -86,6 +90,11 @@
                             </a>
 
                         @elseif($user->role === 'admin')
+                            <a href="{{ route('role.admin', ['tab' => 'rooms']) }}"
+                               class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
+                                <span>Cek Kelas & Lab (View)</span>
+                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 17 }}</span>
+                            </a>
                             <a href="{{ route('role.admin', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
                                 <span>Kalender Ruangan</span>
@@ -184,7 +193,7 @@
                     <div class="form-row-3 form-group">
                         <div>
                             <label class="form-label">Tanggal</label>
-                            <input type="date" name="reservation_date" id="modal-date" value="2026-11-11" onchange="updateRoutingPreview()" class="form-control">
+                            <input type="date" name="reservation_date" id="modal-date" value="{{ date('Y-m-d') }}" onchange="updateRoutingPreview()" class="form-control">
                         </div>
                         <div>
                             <label class="form-label">Jam Mulai</label>
@@ -253,6 +262,7 @@
                 'start_time' => $cs->start_time,
                 'end_time' => $cs->end_time,
                 'course_name' => $cs->course_name,
+                'class_name' => $cs->class_name ?? '',
                 'lecturer_name' => $cs->lecturer?->full_name ?? 'Dosen',
             ])->values() : collect();
 
@@ -323,13 +333,7 @@
 
             if (conflictRes) {
                 box.className = 'reason-box rejected';
-                text.innerHTML = '<strong>Jadwal Bentrok:</strong> Sudah digunakan untuk <em>"' + conflictRes.purpose + '"</em> (' + conflictRes.start_time + '–' + conflictRes.end_time + ').';
-                return;
-            }
-
-            if (building === 'TI') {
-                box.className = 'reason-box approved';
-                text.innerHTML = 'Persetujuan dikirim ke <strong>Kepala Laboratorium: ' + kalab + '</strong>.';
+                text.innerHTML = '<strong>Jadwal Bentrok:</strong> Sudah disetujui untuk <em>"' + conflictRes.purpose + '"</em> (' + conflictRes.start_time + '–' + conflictRes.end_time + ').';
                 return;
             }
 
@@ -339,9 +343,22 @@
                 (start < cs.end_time && end > cs.start_time)
             );
 
+            if (building === 'TI') {
+                if (conflictClass) {
+                    const clsLabel = conflictClass.class_name ? ' (' + conflictClass.class_name + ')' : '';
+                    box.className = 'reason-box rejected';
+                    text.innerHTML = 'Terdapat jadwal kuliah/praktikum <em>"' + conflictClass.course_name + clsLabel + '"</em> (' + conflictClass.lecturer_name + '). Persetujuan dikirim ke <strong>Kepala Laboratorium: ' + kalab + '</strong>.';
+                } else {
+                    box.className = 'reason-box approved';
+                    text.innerHTML = 'Persetujuan dikirim ke <strong>Kepala Laboratorium: ' + kalab + '</strong>.';
+                }
+                return;
+            }
+
             if (conflictClass) {
+                const clsLabel = conflictClass.class_name ? ' (' + conflictClass.class_name + ')' : '';
                 box.className = 'reason-box rejected';
-                text.innerHTML = 'Terdapat jadwal kuliah <em>"' + conflictClass.course_name + '"</em>. Persetujuan dikirim ke <strong>Dosen: ' + conflictClass.lecturer_name + '</strong>.';
+                text.innerHTML = 'Terdapat jadwal kuliah <em>"' + conflictClass.course_name + clsLabel + '"</em>. Persetujuan dikirim ke <strong>Dosen Pengampu: ' + conflictClass.lecturer_name + '</strong>.';
             } else {
                 box.className = 'reason-box approved';
                 text.innerHTML = 'Tidak ada jadwal kuliah pada jam ini. Persetujuan dikirim ke <strong>BAAK</strong>.';

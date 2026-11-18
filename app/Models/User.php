@@ -52,8 +52,31 @@ class User extends Authenticatable
         return $this->hasMany(ClassSchedule::class, 'lecturer_id');
     }
 
+    /**
+     * Relasi ERD 1: One-to-Many (1:N) — PENGGUNA (1) -> Mengajukan -> (N) PENGAJUAN_PEMINJAMAN
+     * Satu pengguna dapat membuat banyak pengajuan peminjaman.
+     */
     public function reservations()
     {
         return $this->hasMany(Reservation::class, 'requester_id');
+    }
+
+    /**
+     * Relasi ERD 1: One-to-Many (1:N) — PENYETUJU (1) -> Menangani / Dilakukan Oleh -> (N) PERSETUJUAN
+     * Satu penyetuju (Dosen, BAAK, atau Kalab) dapat menangani banyak persetujuan.
+     */
+    public function handledApprovals()
+    {
+        return $this->hasMany(Approval::class, 'approver_id');
+    }
+
+    /**
+     * Relasi ERD 3: Many-to-Many (M:N) — PENGGUNA (M) <-> (N) RUANGAN
+     * Diselesaikan secara relasional melalui tabel transaksi PENGAJUAN_PEMINJAMAN (reservations).
+     */
+    public function borrowedRooms()
+    {
+        return $this->belongsToMany(Room::class, 'reservations', 'requester_id', 'room_id')
+            ->withPivot(['id', 'purpose', 'reservation_date', 'start_time', 'end_time', 'status', 'submitted_at']);
     }
 }

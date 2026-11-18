@@ -14,72 +14,97 @@ class DatabaseSeeder extends Seeder
 {
     /**
      * Master Data RoomReserve:
-     * - Akun 5 Role (Mahasiswa, Dosen, Kalab, BAAK, Admin) untuk pengujian login
-     * - Gedung GKT (4 Lantai) & Gedung TI (2 Lantai)
-     * - 17 Ruangan Master (8 Ruang GKT & 9 Laboratorium TI)
-     * - Pemetaan Kepala Laboratorium untuk 9 Lab TI
-     * (Semua data transaksi peminjaman & jadwal bersih tanpa data dummy)
+     * - 7 Kepala Laboratorium (Kalab) sesuai daftar resmi Jurusan TI
+     * - 26 Dosen Pengampu (termasuk Pimpinan, Kaprodi, dan seluruh Dosen Pengajar)
+     * - Akun BAAK, Mahasiswa/Organisasi, dan Administrator Sistem (Database Seeded)
+     * - Gedung GKT (4 Lantai, 8 Ruang Kelas) & Gedung TI (2 Lantai, 9 Laboratorium)
      */
     public function run(): void
     {
         $password = Hash::make('password123');
         $now = now();
 
-        // 1. MASTER USERS (5 Role untuk Pengujian Autentikasi & Hak Akses)
+        // 1. MASTER USERS — MAHASISWA (KOMTING KELAS) & ORGANISASI
         User::create([
-            'full_name'     => 'Budi Santoso (Ketua HMTI)',
+            'full_name'     => 'Budi Santoso (Komting TI-5A)',
             'email'         => 'mahasiswa@roomreserve.ac.id',
             'password_hash' => $password,
             'role'          => 'mahasiswa',
             'status'        => 'active',
         ]);
         User::create([
-            'full_name'     => 'Rizky Pratama (BEM)',
+            'full_name'     => 'Rizky Pratama (Ketua HMTI / BEM)',
             'email'         => 'bem@roomreserve.ac.id',
             'password_hash' => $password,
             'role'          => 'mahasiswa',
             'status'        => 'active',
         ]);
 
-        $dosen1 = User::create([
-            'full_name'     => 'Dr. Hendra Saputra, M.Kom.',
-            'email'         => 'dosen.hendra@roomreserve.ac.id',
-            'password_hash' => $password,
-            'role'          => 'dosen',
-            'status'        => 'active',
-        ]);
-        User::create([
-            'full_name'     => 'Prof. Bambang Irawan, Ph.D.',
-            'email'         => 'dosen.bambang@roomreserve.ac.id',
-            'password_hash' => $password,
-            'role'          => 'dosen',
-            'status'        => 'active',
-        ]);
+        // 2. MASTER USERS — 7 KEPALA LABORATORIUM (KALAB GEDUNG TI)
+        $kalabList = [
+            ['key' => 'desi',     'name' => 'Desi Amirullah, M.T.',           'email' => 'andes@roomreserve.ac.id'],
+            ['key' => 'kasmawi',  'name' => 'Kasmawi, M.Kom. CISA',           'email' => 'kasmawi@roomreserve.ac.id'],
+            ['key' => 'miftahul', 'name' => 'Miftahul Jannah, S.Pd., M.Kom.', 'email' => 'miftahuljannah@roomreserve.ac.id'],
+            ['key' => 'fahmi',    'name' => 'Nurul Fahmi, S.ST., M.T.',       'email' => 'nurulfahmi@roomreserve.ac.id'],
+            ['key' => 'rezki',    'name' => 'Rezki Kurniati, S.Kom., M.Kom.', 'email' => 'rezki@roomreserve.ac.id'],
+            ['key' => 'musri',    'name' => 'Tengku Musri, S.ST., M.Kom.',    'email' => 'tengkumusri@roomreserve.ac.id'],
+            ['key' => 'niky',     'name' => 'Niky Hardinata, M.Kom.',         'email' => 'nikyhardinata@roomreserve.ac.id'],
+        ];
 
-        $kalab1 = User::create([
-            'full_name'     => 'Ir. Rahmat Hidayat, S.ST., M.T.',
-            'email'         => 'kalab.rahmat@roomreserve.ac.id',
-            'password_hash' => $password,
-            'role'          => 'kalab',
-            'status'        => 'active',
-        ]);
-        $kalab2 = User::create([
-            'full_name'     => 'Dewi Sartika, S.Kom., M.Kom.',
-            'email'         => 'kalab.dewi@roomreserve.ac.id',
-            'password_hash' => $password,
-            'role'          => 'kalab',
-            'status'        => 'active',
-        ]);
-        $kalab3 = User::create([
-            'full_name'     => 'Fajar Pratama, S.ST., M.T.',
-            'email'         => 'kalab.fajar@roomreserve.ac.id',
-            'password_hash' => $password,
-            'role'          => 'kalab',
-            'status'        => 'active',
-        ]);
+        $kalabs = [];
+        foreach ($kalabList as $k) {
+            $kalabs[$k['key']] = User::create([
+                'full_name'     => $k['name'],
+                'email'         => $k['email'],
+                'password_hash' => $password,
+                'role'          => 'kalab',
+                'status'        => 'active',
+            ]);
+        }
 
+        // 3. MASTER USERS — 26 DOSEN PENGAMPU (PIMPINAN, KAPRODI, & DOSEN PENGAJAR)
+        $dosenList = [
+            ['Agus Tedyyana, M.Kom., Ph.D.',             'agustedyyana@roomreserve.ac.id'],
+            ['Fajar Ratnawati, S.Kom., M.Cs.',           'fajar@roomreserve.ac.id'],
+            ['Depandi Enda, S.ST., M.Kom.',              'depandienda@roomreserve.ac.id'],
+            ['Wahyat, S.Kom., M.Kom',                    'wahyat@roomreserve.ac.id'],
+            ['Nurmi Hidayasari, S.T., M.Kom.',           'nurmihidayasari@roomreserve.ac.id'],
+            ['Danuri, M.Cs',                             'danuri@roomreserve.ac.id'],
+            ['Fajri Profesio Putra, S.Kom., M.Cs.',      'fajri@roomreserve.ac.id'],
+            ['Jaroji',                                   'jaroji@roomreserve.ac.id'],
+            ['Lipantri Mashur Gultom',                   'lipantri@roomreserve.ac.id'],
+            ['Mansur, S.Kom., M.Kom.',                   'mansur@roomreserve.ac.id'],
+            ['Muhamad Nasir',                            'muhamadnasir@roomreserve.ac.id'],
+            ['Sri Mawarni',                              'srimawarni@roomreserve.ac.id'],
+            ['Supria, S.ST., M.Kom.',                    'phiya@roomreserve.ac.id'],
+            ['Afis Julianto, M.Kom',                     'afisjulianto@roomreserve.ac.id'],
+            ['Desi Wahana, M. Li.',                      'desiwahana@roomreserve.ac.id'],
+            ['Eko Prayitno, M.Kom.',                     'ekoprayitno@roomreserve.ac.id'],
+            ['Elvi Rahmi, S.T., M.Kom.',                 'elvirahmi@roomreserve.ac.id'],
+            ['Eva Kurniawaty',                           'evakurniawaty@roomreserve.ac.id'],
+            ['Eva Yumami, S.Kom., M.T',                  'evayumami@roomreserve.ac.id'],
+            ['I Gusti Agung Putu Mahendra, M.Kom.',      'mahendra@roomreserve.ac.id'],
+            ['Muhammad Asep Subandri, M.Kom.',           'subandri@roomreserve.ac.id'],
+            ['Muhammad Ikhsan Wibowo, S.Kom., M.T.',     'mikhsanw@roomreserve.ac.id'],
+            ['Muhammad Ridho Nosa, S.T.,M.Kom',          'ridhonosa@roomreserve.ac.id'],
+            ['PRETTI RISTRA, S.Pd., M.Ed.',              'prettirista@roomreserve.ac.id'],
+            ['Zuliar Efendi, M.Kom.',                    'zuliarefendi@roomreserve.ac.id'],
+            ['Ryci Rahmatil Fiska, S.Kom., M.Kom.',      'rycirf@roomreserve.ac.id'],
+        ];
+
+        foreach ($dosenList as $d) {
+            User::create([
+                'full_name'     => $d[0],
+                'email'         => $d[1],
+                'password_hash' => $password,
+                'role'          => 'dosen',
+                'status'        => 'active',
+            ]);
+        }
+
+        // 4. MASTER USERS — BAAK & ADMINISTRATOR SISTEM (DIBUAT DI DATABASE)
         User::create([
-            'full_name'     => 'Siti Aminah, S.E., M.Si. (BAAK)',
+            'full_name'     => 'Petugas Akademik (BAAK)',
             'email'         => 'baak@roomreserve.ac.id',
             'password_hash' => $password,
             'role'          => 'baak',
@@ -94,11 +119,11 @@ class DatabaseSeeder extends Seeder
             'status'        => 'active',
         ]);
 
-        // 2. MASTER BUILDINGS (Gedung GKT 4 Lantai & Gedung TI 2 Lantai)
+        // 5. MASTER BUILDINGS (Gedung GKT 4 Lantai & Gedung TI 2 Lantai)
         $gkt = Building::create(['name' => 'GKT', 'total_floors' => 4]);
         $ti  = Building::create(['name' => 'TI',  'total_floors' => 2]);
 
-        // 3. MASTER ROOMS (Ruang GKT Lantai 1-4 & 9 Laboratorium Gedung TI)
+        // 6. MASTER ROOMS — GEDUNG GKT (Lantai 1 - 4)
         $gktRoomsData = [
             [1, 'GKT-101', 'Ruang Kelas GKT 101', 'Ruang Kelas', 40],
             [1, 'GKT-102', 'Ruang Kelas GKT 102', 'Ruang Kelas', 40],
@@ -121,16 +146,18 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        // 7. MASTER ROOMS — LABORATORIUM GEDUNG TI SESUAI DATA RESMI FASILITAS & PEMETAAN KALAB
         $tiLabsData = [
-            [1, 'LAB-TI-01', 'Lab. Jaringan Komputer (Jarkom)', 36, $kalab1->id],
-            [1, 'LAB-TI-02', 'Lab. Keamanan Siber & Cloud (Docker)', 32, $kalab1->id],
-            [1, 'LAB-TI-03', 'Lab. Administrasi Server & Kontainer', 32, $kalab1->id],
-            [1, 'LAB-TI-04', 'Lab. Basis Data Terpadu', 36, $kalab2->id],
-            [1, 'LAB-TI-05', 'Lab. Pemrograman Dasar & Algoritma', 40, $kalab2->id],
-            [2, 'LAB-TI-06', 'Lab. Rekayasa Perangkat Lunak (RPL)', 36, $kalab2->id],
-            [2, 'LAB-TI-07', 'Lab. Sistem Tertanam & IoT', 30, $kalab3->id],
-            [2, 'LAB-TI-08', 'Lab. Multimedia & Animasi 3D', 32, $kalab3->id],
-            [2, 'LAB-TI-09', 'Lab. Kecerdasan Buatan (AI) & Data Science', 30, $kalab3->id],
+            [1, 'LAB-TI-01', 'Laboratorium Artificial Intelligence',          32, $kalabs['miftahul']->id],
+            [1, 'LAB-TI-02', 'Laboratorium Pengembangan Perangkat Lunak',     30, $kalabs['desi']->id],
+            [1, 'LAB-TI-03', 'Laboratorium Keamanan Informasi',               32, $kalabs['kasmawi']->id],
+            [1, 'LAB-TI-04', 'Laboratorium High Performance Computing',       32, $kalabs['desi']->id],
+            [1, 'LAB-TI-05', 'Lab Pemrograman',                               32, $kalabs['miftahul']->id],
+            [1, 'LAB-TI-06', 'Laboratorium Software Testing',                 32, $kalabs['rezki']->id],
+            [1, 'LAB-TI-07', 'Laboratorium Internet of Things',               32, $kalabs['fahmi']->id],
+            [2, 'LAB-TI-08', 'Laboratorium Multimedia',                       32, $kalabs['niky']->id],
+            [2, 'LAB-TI-09', 'Laboratorium Jaringan Komputer',                32, $kalabs['musri']->id],
+            [2, 'LAB-TI-10', 'Laboratorium Sistem Informasi',                 30, $kalabs['rezki']->id],
         ];
         foreach ($tiLabsData as $lab) {
             $room = Room::create([
@@ -143,7 +170,6 @@ class DatabaseSeeder extends Seeder
                 'status'      => 'available',
             ]);
 
-            // 4. PEMETAAN KALAB (LAB_MANAGERS)
             LabManager::create([
                 'room_id'     => $room->id,
                 'user_id'     => $lab[4],
@@ -151,7 +177,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        // 5. LOG INISIALISASI SISTEM (BERSIH TANPA DATA DUMMY)
+        // 8. LOG INISIALISASI SISTEM
         AuditLog::create([
             'user_id'    => $admin->id,
             'action'     => 'SYSTEM_INITIALIZED',

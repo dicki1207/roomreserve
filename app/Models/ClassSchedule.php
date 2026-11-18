@@ -12,6 +12,7 @@ class ClassSchedule extends Model
         'room_id',
         'lecturer_id',
         'course_name',
+        'class_name',
         'schedule_date',
         'start_time',
         'end_time',

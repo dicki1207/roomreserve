@@ -107,6 +107,183 @@ class RoomReserveController extends Controller
         return view('roles.kalab', $data);
     }
 
+    /**
+     * Daftar Mata Kuliah Resmi Jurusan Teknik Informatika (Pilihan Dropdown Bebas Typo)
+     */
+    private function courseOptions(): array
+    {
+        return [
+            'Mata Kuliah Dasar & Umum Jurusan TI' => [
+                'Algoritma dan Pemrograman',
+                'Struktur Data',
+                'Basis Data',
+                'Pemrograman Berorientasi Objek (PBO)',
+                'Jaringan Komputer',
+                'Sistem Operasi',
+                'Matematika Diskrit',
+                'Aljabar Linear dan Matriks',
+                'Statistika dan Probabilitas',
+                'Interaksi Manusia dan Komputer (IMK)',
+                'Metodologi Penelitian',
+                'Bahasa Inggris Teknik',
+                'Etika Profesi TI',
+                'Kewirausahaan Teknologi',
+            ],
+            'D-III Teknik Informatika (TI)' => [
+                'Pemrograman Web',
+                'Pemrograman Web Lanjut',
+                'Pemrograman Perangkat Bergerak (Mobile)',
+                'Administrasi Sistem dan Jaringan',
+                'Administrasi Basis Data',
+                'Sistem Informasi Manajemen',
+                'Desain Grafis dan Multimedia',
+                'Pengolahan Citra Digital',
+                'Internet of Things (IoT)',
+                'Komputasi Awan (Cloud Computing)',
+                'Proyek Teknik Informatika',
+            ],
+            'D-IV Rekayasa Perangkat Lunak (RPL)' => [
+                'Rekayasa Perangkat Lunak',
+                'Analisis dan Perancangan Perangkat Lunak',
+                'Arsitektur dan Desain Perangkat Lunak',
+                'Konstruksi dan Evolusi Perangkat Lunak',
+                'Pengujian dan Penjaminan Kualitas Perangkat Lunak (Software Testing)',
+                'Manajemen Proyek Perangkat Lunak',
+                'Pemrograman Framework & Microservices',
+                'DevOps dan Continuous Integration (CI/CD)',
+                'Kecerdasan Buatan (Artificial Intelligence)',
+                'Machine Learning & Data Mining',
+                'Data Warehouse dan Business Intelligence',
+            ],
+            'D-IV Keamanan Sistem Informasi (KSI)' => [
+                'Pengantar Keamanan Informasi',
+                'Kriptografi Terapan',
+                'Keamanan Jaringan Komputer',
+                'Keamanan Aplikasi Web',
+                'Keamanan Sistem Operasi & Server',
+                'Keamanan Infrastruktur Cloud & Kontainer',
+                'Ethical Hacking dan Penetration Testing',
+                'Forensik Digital dan Investigasi Siber',
+                'Manajemen Risiko dan Tata Kelola Keamanan (Audit TI)',
+                'Security Operations Center (SOC) & Incident Response',
+                'Keamanan Perangkat Bergerak dan IoT',
+            ],
+        ];
+    }
+
+    /**
+     * Daftar Kelas Resmi Jurusan Teknik Informatika (Pilihan Dropdown Terpisah dari Mata Kuliah)
+     */
+    private function classOptions(): array
+    {
+        return [
+            'D-III Teknik Informatika (TI)' => [
+                'TI-1A', 'TI-1B', 'TI-1C',
+                'TI-2A', 'TI-2B', 'TI-2C',
+                'TI-3A', 'TI-3B', 'TI-3C',
+                'TI-4A', 'TI-4B', 'TI-4C',
+                'TI-5A', 'TI-5B', 'TI-5C',
+                'TI-6A', 'TI-6B', 'TI-6C',
+            ],
+            'D-IV Rekayasa Perangkat Lunak (RPL)' => [
+                'RPL-1A', 'RPL-1B', 'RPL-1C',
+                'RPL-2A', 'RPL-2B', 'RPL-2C',
+                'RPL-3A', 'RPL-3B', 'RPL-3C',
+                'RPL-4A', 'RPL-4B', 'RPL-4C',
+                'RPL-5A', 'RPL-5B', 'RPL-5C',
+                'RPL-6A', 'RPL-6B', 'RPL-6C',
+                'RPL-7A', 'RPL-7B', 'RPL-7C',
+                'RPL-8A', 'RPL-8B', 'RPL-8C',
+            ],
+            'D-IV Keamanan Sistem Informasi (KSI)' => [
+                'KSI-1A', 'KSI-1B', 'KSI-1C',
+                'KSI-2A', 'KSI-2B', 'KSI-2C',
+                'KSI-3A', 'KSI-3B', 'KSI-3C',
+                'KSI-4A', 'KSI-4B', 'KSI-4C',
+                'KSI-5A', 'KSI-5B', 'KSI-5C',
+                'KSI-6A', 'KSI-6B', 'KSI-6C',
+                'KSI-7A', 'KSI-7B', 'KSI-7C',
+                'KSI-8A', 'KSI-8B', 'KSI-8C',
+            ],
+        ];
+    }
+
+    /**
+     * Daftar Nama Ruangan Resmi GKT & Laboratorium Gedung TI (Pilihan Dropdown Bebas Typo)
+     */
+    private function roomNameOptions(): array
+    {
+        return [
+            'Gedung GKT (Ruang Kelas & Aula Lantai 1–4)' => [
+                'Ruang Kelas GKT 101',
+                'Ruang Kelas GKT 102',
+                'Ruang Kelas GKT 103',
+                'Ruang Kelas GKT 104',
+                'Ruang Kelas GKT 201',
+                'Ruang Kelas GKT 202',
+                'Ruang Kelas GKT 203',
+                'Ruang Kelas GKT 204',
+                'Ruang Diskusi GKT 203',
+                'Ruang Kuliah Gabungan GKT 301',
+                'Ruang Kelas GKT 302',
+                'Ruang Kelas GKT 303',
+                'Ruang Kelas GKT 304',
+                'Aula Seminar GKT Lantai 4',
+                'Ruang Kelas GKT 402',
+                'Ruang Kelas GKT 403',
+                'Ruang Kelas GKT 404',
+            ],
+            'Gedung TI (Laboratorium Jurusan TI)' => [
+                'Laboratorium Artificial Intelligence',
+                'Laboratorium Pengembangan Perangkat Lunak',
+                'Laboratorium Keamanan Informasi',
+                'Laboratorium High Performance Computing',
+                'Lab Pemrograman',
+                'Laboratorium Software Testing',
+                'Laboratorium Internet of Things',
+                'Laboratorium Multimedia',
+                'Laboratorium Jaringan Komputer',
+                'Laboratorium Sistem Informasi',
+            ],
+        ];
+    }
+
+    /**
+     * Daftar Tipe Ruangan Resmi (Pilihan Dropdown Bebas Typo)
+     */
+    private function roomTypeOptions(): array
+    {
+        return [
+            'Ruang Kelas',
+            'Ruang Kuliah Gabungan',
+            'Aula Seminar',
+            'Ruang Diskusi',
+            'Laboratorium TI',
+            'Laboratorium Praktikum',
+            'Laboratorium Riset',
+        ];
+    }
+
+    /**
+     * Daftar Kode Ruangan Standar (Pilihan Dropdown Bebas Typo)
+     */
+    private function roomCodeOptions(): array
+    {
+        return [
+            'Kode Ruang Gedung GKT' => [
+                'GKT-101', 'GKT-102', 'GKT-103', 'GKT-104',
+                'GKT-201', 'GKT-202', 'GKT-203', 'GKT-204',
+                'GKT-301', 'GKT-302', 'GKT-303', 'GKT-304',
+                'GKT-401', 'GKT-402', 'GKT-403', 'GKT-404',
+            ],
+            'Kode Laboratorium Gedung TI' => [
+                'LAB-TI-01', 'LAB-TI-02', 'LAB-TI-03', 'LAB-TI-04', 'LAB-TI-05',
+                'LAB-TI-06', 'LAB-TI-07', 'LAB-TI-08', 'LAB-TI-09', 'LAB-TI-10',
+                'LAB-TI-11', 'LAB-TI-12',
+            ],
+        ];
+    }
+
     // =========================================================================
     // 4. TAMPILAN KHUSUS ROLE: BAAK
     // =========================================================================
@@ -115,7 +292,14 @@ class RoomReserveController extends Controller
         $data = $this->sharedViewData();
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['lecturers'] = User::where('role', 'dosen')->orderBy('full_name')->get();
+        $data['kalabUsers'] = User::where('role', 'kalab')->orderBy('full_name')->get();
+        $data['students'] = User::where('role', 'mahasiswa')->orderBy('id')->get();
         $data['gktRooms'] = $data['allRooms']->filter(fn($r) => $r->building->name === 'GKT');
+        $data['courseOptions'] = $this->courseOptions();
+        $data['classOptions'] = $this->classOptions();
+        $data['roomNameOptions'] = $this->roomNameOptions();
+        $data['roomTypeOptions'] = $this->roomTypeOptions();
+        $data['roomCodeOptions'] = $this->roomCodeOptions();
 
         return view('roles.baak', $data);
     }
@@ -127,9 +311,8 @@ class RoomReserveController extends Controller
     {
         $data = $this->sharedViewData();
         $data['tab'] = $request->query('tab', 'dashboard');
-        $data['allUsers'] = User::orderBy('id')->get();
-        $data['kalabUsers'] = User::where('role', 'kalab')->orderBy('full_name')->get();
-        $data['tiLabs'] = $data['allRooms']->filter(fn($r) => $r->building->name === 'TI');
+        $data['staffUsers'] = User::whereIn('role', ['dosen', 'kalab', 'baak'])->orderBy('id')->get();
+        $data['adminUsers'] = User::where('role', 'admin')->orderBy('id')->get();
         $data['auditLogs'] = AuditLog::with('user')->orderByDesc('id')->limit(40)->get();
 
         return view('roles.admin', $data);
@@ -443,25 +626,34 @@ class RoomReserveController extends Controller
             'room_id'       => 'required|exists:rooms,id',
             'lecturer_id'   => 'required|exists:users,id',
             'course_name'   => 'required|string|max:150',
+            'class_name'    => 'nullable|string|max:60',
             'schedule_date' => 'required|date',
             'start_time'    => 'required|string',
             'end_time'      => 'required|string',
         ]);
 
-        $schedule = ClassSchedule::create($request->only([
-            'room_id', 'lecturer_id', 'course_name', 'schedule_date', 'start_time', 'end_time'
-        ]));
+        $schedule = ClassSchedule::create([
+            'room_id'       => $request->input('room_id'),
+            'lecturer_id'   => $request->input('lecturer_id'),
+            'course_name'   => trim($request->input('course_name')),
+            'class_name'    => $request->filled('class_name') ? trim($request->input('class_name')) : null,
+            'schedule_date' => $request->input('schedule_date'),
+            'start_time'    => $request->input('start_time'),
+            'end_time'      => $request->input('end_time'),
+        ]);
+
+        $label = $schedule->class_name ? "{$schedule->course_name} ({$schedule->class_name})" : $schedule->course_name;
 
         AuditLog::create([
             'user_id'    => Auth::id(),
-            'action'     => "CREATE_CLASS_SCHEDULE ({$schedule->course_name})",
+            'action'     => "CREATE_CLASS_SCHEDULE ({$label})",
             'entity'     => 'CLASS_SCHEDULES',
             'entity_id'  => $schedule->id,
             'created_at' => now(),
         ]);
 
         return redirect()->route('role.baak', ['tab' => 'schedules'])
-            ->with('success', "Jadwal kuliah \"{$schedule->course_name}\" berhasil ditambahkan.");
+            ->with('success', "Jadwal kuliah \"{$label}\" berhasil ditambahkan.");
     }
 
     public function updateSchedule(Request $request, $id)
@@ -472,25 +664,34 @@ class RoomReserveController extends Controller
             'room_id'       => 'required|exists:rooms,id',
             'lecturer_id'   => 'required|exists:users,id',
             'course_name'   => 'required|string|max:150',
+            'class_name'    => 'nullable|string|max:60',
             'schedule_date' => 'required|date',
             'start_time'    => 'required|string',
             'end_time'      => 'required|string',
         ]);
 
-        $schedule->update($request->only([
-            'room_id', 'lecturer_id', 'course_name', 'schedule_date', 'start_time', 'end_time'
-        ]));
+        $schedule->update([
+            'room_id'       => $request->input('room_id'),
+            'lecturer_id'   => $request->input('lecturer_id'),
+            'course_name'   => trim($request->input('course_name')),
+            'class_name'    => $request->filled('class_name') ? trim($request->input('class_name')) : null,
+            'schedule_date' => $request->input('schedule_date'),
+            'start_time'    => $request->input('start_time'),
+            'end_time'      => $request->input('end_time'),
+        ]);
+
+        $label = $schedule->class_name ? "{$schedule->course_name} ({$schedule->class_name})" : $schedule->course_name;
 
         AuditLog::create([
             'user_id'    => Auth::id(),
-            'action'     => "UPDATE_CLASS_SCHEDULE ({$schedule->course_name})",
+            'action'     => "UPDATE_CLASS_SCHEDULE ({$label})",
             'entity'     => 'CLASS_SCHEDULES',
             'entity_id'  => $schedule->id,
             'created_at' => now(),
         ]);
 
         return redirect()->route('role.baak', ['tab' => 'schedules'])
-            ->with('success', "Jadwal kuliah \"{$schedule->course_name}\" berhasil diperbarui.");
+            ->with('success', "Jadwal kuliah \"{$label}\" berhasil diperbarui.");
     }
 
     public function destroySchedule($id)
@@ -616,15 +817,142 @@ class RoomReserveController extends Controller
     }
 
     // =========================================================================
-    // CRUD 4: ADMIN — KELOLA AKUN PENGGUNA (USERS) & PENUGASAN KALAB
+    // CRUD 4: BAAK — KELOLA AKUN MAHASISWA (MAHASISWA DIHANDLE OLEH BAAK)
     // =========================================================================
-    public function storeUser(Request $request)
+    public function storeMahasiswa(Request $request)
     {
         $request->validate([
             'full_name' => 'required|string|max:120',
             'email'     => 'required|email|unique:users,email',
             'password'  => 'required|string|min:4',
-            'role'      => 'required|in:mahasiswa,dosen,kalab,baak,admin',
+        ]);
+
+        $student = User::create([
+            'full_name'     => trim($request->input('full_name')),
+            'email'         => trim($request->input('email')),
+            'password_hash' => Hash::make($request->input('password')),
+            'role'          => 'mahasiswa',
+            'status'        => 'active',
+        ]);
+
+        AuditLog::create([
+            'user_id'    => Auth::id(),
+            'action'     => "BAAK_CREATE_MAHASISWA ({$student->email})",
+            'entity'     => 'USERS',
+            'entity_id'  => $student->id,
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('role.baak', ['tab' => 'students'])
+            ->with('success', "Akun mahasiswa {$student->full_name} berhasil ditambahkan oleh BAAK.");
+    }
+
+    public function updateMahasiswa(Request $request, $id)
+    {
+        $student = User::where('id', $id)->where('role', 'mahasiswa')->firstOrFail();
+
+        $request->validate([
+            'full_name' => 'required|string|max:120',
+            'email'     => 'required|email|unique:users,email,' . $student->id,
+            'status'    => 'required|in:active,inactive',
+            'password'  => 'nullable|string|min:4',
+        ]);
+
+        $data = [
+            'full_name' => trim($request->input('full_name')),
+            'email'     => trim($request->input('email')),
+            'status'    => $request->input('status'),
+        ];
+
+        if ($request->filled('password')) {
+            $data['password_hash'] = Hash::make($request->input('password'));
+        }
+
+        $student->update($data);
+
+        AuditLog::create([
+            'user_id'    => Auth::id(),
+            'action'     => "BAAK_UPDATE_MAHASISWA ({$student->email})",
+            'entity'     => 'USERS',
+            'entity_id'  => $student->id,
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('role.baak', ['tab' => 'students'])
+            ->with('success', "Data akun mahasiswa {$student->full_name} berhasil diperbarui.");
+    }
+
+    public function destroyMahasiswa($id)
+    {
+        $student = User::where('id', $id)->where('role', 'mahasiswa')->firstOrFail();
+        $name = $student->full_name;
+        $studentId = $student->id;
+
+        Reservation::where('requester_id', $studentId)->each(function ($res) {
+            $res->approval()?->delete();
+            $res->delete();
+        });
+        $student->delete();
+
+        AuditLog::create([
+            'user_id'    => Auth::id(),
+            'action'     => "BAAK_DELETE_MAHASISWA ({$name})",
+            'entity'     => 'USERS',
+            'entity_id'  => $studentId,
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('role.baak', ['tab' => 'students'])
+            ->with('success', "Akun mahasiswa {$name} berhasil dihapus.");
+    }
+
+    public function resetMahasiswaPassword(Request $request, $id)
+    {
+        $student = User::where('id', $id)->where('role', 'mahasiswa')->firstOrFail();
+
+        $request->validate([
+            'password'           => 'required|string|min:4',
+            'verification_notes' => 'nullable|string|max:250',
+        ]);
+
+        $newPassword = $request->input('password');
+        $verif = trim((string) $request->input('verification_notes', 'Verifikasi langsung di BAAK (Komting Kelas / Organisasi)'));
+
+        $student->update([
+            'password_hash' => Hash::make($newPassword),
+        ]);
+
+        AuditLog::create([
+            'user_id'    => Auth::id(),
+            'action'     => "BAAK_RESET_PASSWORD_MAHASISWA ({$student->full_name} — {$verif})",
+            'entity'     => 'USERS',
+            'entity_id'  => $student->id,
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('role.baak', ['tab' => 'students'])
+            ->with('success', "Password untuk {$student->full_name} ({$student->email}) berhasil diperbarui oleh BAAK.");
+    }
+
+    // =========================================================================
+    // CRUD 5: ADMIN — HANYA MEMBUAT AKUN DOSEN, KALAB, DAN BAAK
+    // (Akun Admin dibuat di Database; Akun Mahasiswa dihandle oleh BAAK)
+    // =========================================================================
+    public function storeUser(Request $request)
+    {
+        if ($request->input('role') === 'admin') {
+            return back()->with('error', 'Akun Administrator hanya dibuat langsung di database, tidak dapat dibuat melalui form.');
+        }
+
+        if ($request->input('role') === 'mahasiswa') {
+            return back()->with('error', 'Akun Mahasiswa dikelola oleh BAAK, bukan melalui Administrator.');
+        }
+
+        $request->validate([
+            'full_name' => 'required|string|max:120',
+            'email'     => 'required|email|unique:users,email',
+            'password'  => 'required|string|min:4',
+            'role'      => 'required|in:dosen,kalab,baak',
         ]);
 
         $newUser = User::create([
@@ -650,10 +978,18 @@ class RoomReserveController extends Controller
     {
         $user = User::findOrFail($id);
 
+        if ($user->role === 'admin' || $request->input('role') === 'admin') {
+            return back()->with('error', 'Akun Administrator dibuat langsung di database dan tidak dapat diubah.');
+        }
+
+        if ($user->role === 'mahasiswa' || $request->input('role') === 'mahasiswa') {
+            return back()->with('error', 'Akun Mahasiswa dikelola oleh BAAK.');
+        }
+
         $request->validate([
             'full_name' => 'required|string|max:120',
             'email'     => 'required|email|unique:users,email,' . $user->id,
-            'role'      => 'required|in:mahasiswa,dosen,kalab,baak,admin',
+            'role'      => 'required|in:dosen,kalab,baak',
             'status'    => 'required|in:active,inactive',
             'password'  => 'nullable|string|min:4',
         ]);
@@ -682,6 +1018,37 @@ class RoomReserveController extends Controller
         return back()->with('success', "Akun {$user->full_name} berhasil diperbarui.");
     }
 
+    public function resetStaffPassword(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        if (!in_array($user->role, ['dosen', 'kalab', 'baak'], true)) {
+            return back()->with('error', 'Administrator hanya dapat memperbarui kata sandi untuk akun Dosen, Kalab, atau BAAK.');
+        }
+
+        $request->validate([
+            'password' => 'required|string|min:4',
+        ]);
+
+        $newPassword = $request->input('password');
+        $user->update([
+            'password_hash' => Hash::make($newPassword),
+        ]);
+
+        AuditLog::create([
+            'user_id'    => Auth::id(),
+            'action'     => "ADMIN_RESET_PASSWORD_STAFF ({$user->full_name} [{$user->role}] via Konfirmasi WA)",
+            'entity'     => 'USERS',
+            'entity_id'  => $user->id,
+            'created_at' => now(),
+        ]);
+
+        return back()->with(
+            'success',
+            "Password akun {$user->full_name} (Role: " . strtoupper($user->role) . ") berhasil diperbarui menjadi \"{$newPassword}\". Silakan informasikan kembali via WhatsApp."
+        );
+    }
+
     public function destroyUser($id)
     {
         if ((int) Auth::id() === (int) $id) {
@@ -689,6 +1056,15 @@ class RoomReserveController extends Controller
         }
 
         $user = User::findOrFail($id);
+
+        if ($user->role === 'admin') {
+            return back()->with('error', 'Akun Administrator dibuat di database dan tidak dapat dihapus.');
+        }
+
+        if ($user->role === 'mahasiswa') {
+            return back()->with('error', 'Akun Mahasiswa dikelola oleh BAAK.');
+        }
+
         $name = $user->full_name;
         $userId = $user->id;
         $user->delete();

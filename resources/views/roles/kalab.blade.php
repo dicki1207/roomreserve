@@ -98,20 +98,49 @@
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">Laboratorium Saya</div>
-            </div>
-            <div class="card-body">
-                @foreach($myManagedLabs as $lab)
-                    <div style="padding:12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; background:#f8fafc;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                            <span class="badge badge-navy">{{ $lab->room_code }}</span>
-                            <span style="font-size:12px; color:#64748b;">Lantai {{ $lab->floor }} • {{ $lab->capacity }} Unit</span>
+        <div style="display:flex; flex-direction:column; gap:18px;">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Laboratorium Saya</div>
+                </div>
+                <div class="card-body">
+                    @foreach($myManagedLabs as $lab)
+                        <div style="padding:12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; background:#f8fafc;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span class="badge badge-navy">{{ $lab->room_code }}</span>
+                                <span style="font-size:12px; color:#64748b;">Lantai {{ $lab->floor }} • {{ $lab->capacity }} Unit</span>
+                            </div>
+                            <div style="font-weight:600; color:#0f172a;">{{ $lab->room_name }}</div>
                         </div>
-                        <div style="font-weight:600; color:#0f172a;">{{ $lab->room_name }}</div>
-                    </div>
-                @endforeach
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Jadwal Kuliah / Praktikum Lab Saya</div>
+                </div>
+                <div class="card-body">
+                    @php
+                        $managedLabIds = $myManagedLabs->pluck('id')->all();
+                        $labSchedules = $allSchedules->whereIn('room_id', $managedLabIds);
+                    @endphp
+                    @forelse($labSchedules as $cs)
+                        <div style="padding:12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; background:#f8fafc;">
+                            <div style="display:flex; justify-content:space-between; font-weight:600; color:#0f172a; margin-bottom:4px;">
+                                <span class="badge badge-royal">{{ $cs->room->room_code }}</span>
+                                <span style="color:#475569; font-size:12px;">{{ $cs->start_time }}–{{ $cs->end_time }}</span>
+                            </div>
+                            <div style="font-weight:600; color:#1e293b;">{{ $cs->course_name }}</div>
+                            @if(!empty($cs->class_name))
+                                <div style="margin:3px 0;"><span class="badge badge-navy">Kelas {{ $cs->class_name }}</span></div>
+                            @endif
+                            <div style="font-size:12px; color:#64748b;">Dosen: {{ $cs->lecturer->full_name }} • {{ $cs->schedule_date }}</div>
+                        </div>
+                    @empty
+                        <p style="color:#64748b; font-size:12.5px;">Belum ada jadwal kuliah/praktikum di laboratorium Anda.</p>
+                    @endforelse
+                </div>
             </div>
         </div>
     </div>
