@@ -41,47 +41,10 @@
 </div>
 
 @if($tab === 'rooms')
-    <div class="card">
-        <div class="card-header">
-            <div class="card-title">Daftar Ruangan</div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button type="button" onclick="filterRooms('ALL')" id="filter-ALL" class="btn btn-navy">Semua ({{ $allRooms->count() }})</button>
-                <button type="button" onclick="filterRooms('GKT')" id="filter-GKT" class="btn btn-slate">Gedung GKT</button>
-                <button type="button" onclick="filterRooms('TI')" id="filter-TI" class="btn btn-slate">Gedung TI</button>
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="rooms-grid">
-                @foreach($allRooms as $r)
-                    <div class="room-card" data-building="{{ $r->building->name }}">
-                        <div style="padding:16px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                                <span class="badge badge-navy">{{ $r->room_code }}</span>
-                                <span style="font-size:12px; color:#64748b;">Lantai {{ $r->floor }} • {{ $r->capacity }} Kursi</span>
-                            </div>
-                            <div style="font-weight:600; font-size:14.5px; color:#0f172a; margin-bottom:4px;">{{ $r->room_name }}</div>
-                            <div style="font-size:12px; color:#64748b;">
-                                Gedung {{ $r->building->name }} • {{ $r->room_type }}
-                            </div>
-                            @if($r->building->name === 'TI')
-                                <div style="margin-top:8px; font-size:12px; color:#475569;">
-                                    Kalab: {{ $r->labManager?->kalab?->full_name ?? '-' }}
-                                </div>
-                            @endif
-                        </div>
-                        <div style="padding:12px 16px; background:#f8fafc; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                            <span class="badge {{ $r->status === 'available' ? 'badge-emerald' : 'badge-rose' }}">
-                                {{ $r->status === 'available' ? 'Tersedia' : 'Perbaikan' }}
-                            </span>
-                            @if($r->status === 'available')
-                                <button type="button" onclick="openReserveModal({{ $r->id }})" class="btn btn-navy" style="padding:6px 12px; font-size:12px;">Pinjam</button>
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </div>
+    @include('partials.rooms_grid', [
+        'title' => 'Daftar Ruangan GKT & Laboratorium TI',
+        'routeUrl' => route('role.mahasiswa'),
+    ])
 @elseif($tab === 'calendar')
     @include('partials.calendar')
 @else

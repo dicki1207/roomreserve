@@ -27,8 +27,7 @@
                     <thead>
                         <tr>
                             <th>Nama &amp; Komting Kelas / Organisasi</th>
-                            <th>Email / User</th>
-                            <th>Role</th>
+                            <th>Email &amp; Nomor HP Terdaftar</th>
                             <th>Status</th>
                             <th>Aksi BAAK</th>
                         </tr>
@@ -37,8 +36,10 @@
                         @forelse($students as $mhs)
                             <tr>
                                 <td><strong>{{ $mhs->full_name }}</strong></td>
-                                <td>{{ $mhs->email }}</td>
-                                <td><span class="badge badge-royal">MAHASISWA</span></td>
+                                <td>
+                                    <div>{{ $mhs->email }}</div>
+                                    <div style="font-size:11.5px; color:#64748b; margin-top:2px;">HP: <strong>{{ $mhs->phone ?: 'Belum diisi' }}</strong></div>
+                                </td>
                                 <td>
                                     <span class="badge {{ $mhs->status === 'active' ? 'badge-emerald' : 'badge-rose' }}">
                                         {{ $mhs->status === 'active' ? 'Aktif' : 'Nonaktif' }}
@@ -47,12 +48,12 @@
                                 <td>
                                     <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                         <button type="button"
-                                                onclick="openResetStudentPasswordModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}')"
+                                                onclick="openResetStudentPasswordModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ addslashes($mhs->phone ?? '') }}')"
                                                 class="btn btn-navy" style="padding:4px 9px; font-size:11.5px;">
                                             Perbarui Password
                                         </button>
                                         <button type="button"
-                                                onclick="openEditStudentModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ $mhs->status }}')"
+                                                onclick="openEditStudentModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ addslashes($mhs->phone ?? '') }}', '{{ $mhs->status }}')"
                                                 class="btn btn-slate" style="padding:4px 8px; font-size:11.5px;">
                                             Edit Akun
                                         </button>
@@ -68,7 +69,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" style="text-align:center; color:#64748b; padding:24px;">Belum ada akun mahasiswa terdaftar.</td>
+                                <td colspan="4" style="text-align:center; color:#64748b; padding:24px;">Belum ada akun mahasiswa terdaftar.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -87,8 +88,12 @@
                     <input type="text" name="full_name" required placeholder="Contoh: Andi Saputra (Komting TI-5A) / BEM" class="form-control">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Email / User Mahasiswa</label>
+                    <label class="form-label">Email Akun</label>
                     <input type="email" name="email" required placeholder="nim.nama@roomreserve.ac.id" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nomor HP Terdaftar (Verifikasi BAAK)</label>
+                    <input type="text" name="phone" required placeholder="Contoh: 081234567890" class="form-control">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Kata Sandi Awal</label>
@@ -111,11 +116,12 @@
                 @method('PUT')
                 <div style="padding:11px 13px; border-radius:8px; background:#eff6ff; border:1px solid #bfdbfe; font-size:12.5px; color:#1e293b; margin-bottom:14px;">
                     <div><strong>Nama / Organisasi:</strong> <span id="reset-mhs-name"></span></div>
-                    <div><strong>User / Email:</strong> <span id="reset-mhs-email"></span></div>
+                    <div><strong>Email Akun:</strong> <span id="reset-mhs-email"></span></div>
+                    <div><strong>Nomor HP Terdaftar di BAAK:</strong> <span id="reset-mhs-phone" style="color:#1d4ed8; font-weight:700;"></span></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Keterangan Verifikasi (Komting Kelas Berapa / Organisasi Apa &amp; Siapa)</label>
-                    <input type="text" name="verification_notes" id="reset-mhs-verif" required placeholder="Contoh: Hadir di BAAK - Komting Kelas TI-5A / Ketua HMTI" class="form-control">
+                    <label class="form-label">Keterangan Verifikasi (Kesesuaian Email, Nomor HP, &amp; Komting/Organisasi)</label>
+                    <input type="text" name="verification_notes" id="reset-mhs-verif" required placeholder="Contoh: Email &amp; Nomor HP sesuai data BAAK - Komting TI-5A" class="form-control">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Password Baru</label>
@@ -146,6 +152,10 @@
                 <div class="form-group">
                     <label class="form-label">Email</label>
                     <input type="email" name="email" id="edit-student-email" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nomor HP Terdaftar</label>
+                    <input type="text" name="phone" id="edit-student-phone" placeholder="0812xxxxxxxx" class="form-control">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Kata Sandi Baru (Kosongkan jika tidak diubah)</label>
@@ -378,8 +388,22 @@
 @elseif($tab === 'rooms')
     <div class="grid-main-side">
         <div class="card">
-            <div class="card-header">
-                <div class="card-title">Kelola Data & Status Ruangan GKT & Laboratorium TI</div>
+            <div class="card-header" style="flex-wrap:wrap; gap:10px;">
+                <div>
+                    <div class="card-title">Kelola Data &amp; Status Ruangan GKT &amp; Laboratorium TI</div>
+                    <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                        Status penggunaan ditampilkan khusus tanggal <strong>{{ $selectedDate }}</strong>
+                        @if($isToday) (Hari Ini • {{ $nowTime }} WIB) @endif
+                    </div>
+                </div>
+                <form method="GET" action="{{ route('role.baak') }}" style="display:flex; gap:6px; align-items:center;">
+                    <input type="hidden" name="tab" value="rooms">
+                    <label style="font-size:12px; color:#475569; font-weight:600;">Tanggal:</label>
+                    <input type="date" name="date" value="{{ $selectedDate }}" onchange="this.form.submit()" class="form-control" style="padding:5px 9px; font-size:12px; width:auto;">
+                    @if(!$isToday)
+                        <a href="{{ route('role.baak', ['tab' => 'rooms']) }}" class="btn btn-slate" style="padding:5px 9px; font-size:11.5px;">Hari Ini</a>
+                    @endif
+                </form>
             </div>
             <div class="table-wrap">
                 <table class="rr-table">
@@ -389,21 +413,32 @@
                             <th>Nama Ruangan</th>
                             <th>Lokasi</th>
                             <th>Kapasitas</th>
-                            <th>Status</th>
+                            <th>Status ({{ $selectedDate }})</th>
                             <th>Aksi BAAK</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($allRooms as $r)
+                            @php
+                                $st = $roomStatuses[$r->id];
+                                $approvedSlots = $st['approved_slots'];
+                            @endphp
                             <tr>
                                 <td><span class="badge badge-navy">{{ $r->room_code }}</span></td>
                                 <td><strong>{{ $r->room_name }}</strong><br><span style="font-size:11.5px; color:#64748b;">{{ $r->room_type }}</span></td>
                                 <td>Gedung {{ $r->building->name }} • Lt. {{ $r->floor }}</td>
                                 <td>{{ $r->capacity }} Kursi</td>
                                 <td>
-                                    <span class="badge {{ $r->status === 'available' ? 'badge-emerald' : 'badge-rose' }}">
-                                        {{ $r->status === 'available' ? 'Tersedia' : 'Perbaikan' }}
+                                    <span class="badge {{ $st['badge_class'] }}">
+                                        {{ $st['badge_label'] }}
                                     </span>
+                                    @if($approvedSlots->isNotEmpty() && $r->status === 'available')
+                                        @foreach($approvedSlots as $slot)
+                                            <div style="font-size:11px; color:#b45309; margin-top:3px;">
+                                                {{ $slot->start_time }}–{{ $slot->end_time }} WIB ({{ $slot->requester->full_name }})
+                                            </div>
+                                        @endforeach
+                                    @endif
                                 </td>
                                 <td>
                                     <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -609,12 +644,13 @@
 @endif
 
 <script>
-function openResetStudentPasswordModal(id, name, email) {
+function openResetStudentPasswordModal(id, name, email, phone) {
     const modal = document.getElementById('reset-student-pw-modal');
     document.getElementById('reset-student-pw-form').action = '/baak/students/' + id + '/password';
     document.getElementById('reset-mhs-name').textContent = name;
     document.getElementById('reset-mhs-email').textContent = email;
-    document.getElementById('reset-mhs-verif').value = 'Verifikasi hadir di BAAK: ' + name;
+    document.getElementById('reset-mhs-phone').textContent = phone || 'Belum tercatat';
+    document.getElementById('reset-mhs-verif').value = 'Verifikasi Email & Nomor HP cocok di BAAK: ' + name;
     document.getElementById('reset-mhs-password').value = 'password123';
     modal.classList.add('show');
 }
@@ -622,11 +658,12 @@ function closeResetStudentPasswordModal() {
     document.getElementById('reset-student-pw-modal').classList.remove('show');
 }
 
-function openEditStudentModal(id, name, email, status) {
+function openEditStudentModal(id, name, email, phone, status) {
     const modal = document.getElementById('edit-student-modal');
     document.getElementById('edit-student-form').action = '/baak/students/' + id;
     document.getElementById('edit-student-name').value = name;
     document.getElementById('edit-student-email').value = email;
+    document.getElementById('edit-student-phone').value = phone || '';
     document.getElementById('edit-student-status').value = status;
     modal.classList.add('show');
 }

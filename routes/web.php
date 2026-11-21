@@ -88,3 +88,10 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
 Route::middleware(['auth', 'role:dosen,kalab,baak'])
     ->post('/reservations/decide', [RoomReserveController::class, 'decideReservation'])
     ->name('reservations.decide');
+
+// Profil Akun Saya (Tersedia untuk Dosen, Kalab, BAAK, Mahasiswa, & Admin)
+Route::middleware(['auth'])->prefix('profile')->group(function () {
+    Route::get('/', [RoomReserveController::class, 'showProfile'])->name('profile.show');
+    Route::post('/avatar', [RoomReserveController::class, 'updateProfileAvatar'])->name('profile.avatar');
+    Route::put('/password', [RoomReserveController::class, 'updateProfilePassword'])->name('profile.password');
+});

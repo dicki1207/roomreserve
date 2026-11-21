@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
         User::create([
             'full_name'     => 'Budi Santoso (Komting TI-5A)',
             'email'         => 'mahasiswa@roomreserve.ac.id',
+            'phone'         => '081276001001',
             'password_hash' => $password,
             'role'          => 'mahasiswa',
             'status'        => 'active',
@@ -35,6 +36,7 @@ class DatabaseSeeder extends Seeder
         User::create([
             'full_name'     => 'Rizky Pratama (Ketua HMTI / BEM)',
             'email'         => 'bem@roomreserve.ac.id',
+            'phone'         => '081276001002',
             'password_hash' => $password,
             'role'          => 'mahasiswa',
             'status'        => 'active',
@@ -52,10 +54,11 @@ class DatabaseSeeder extends Seeder
         ];
 
         $kalabs = [];
-        foreach ($kalabList as $k) {
+        foreach ($kalabList as $idx => $k) {
             $kalabs[$k['key']] = User::create([
                 'full_name'     => $k['name'],
                 'email'         => $k['email'],
+                'phone'         => '0812760020' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT),
                 'password_hash' => $password,
                 'role'          => 'kalab',
                 'status'        => 'active',
@@ -92,10 +95,11 @@ class DatabaseSeeder extends Seeder
             ['Ryci Rahmatil Fiska, S.Kom., M.Kom.',      'rycirf@roomreserve.ac.id'],
         ];
 
-        foreach ($dosenList as $d) {
+        foreach ($dosenList as $idx => $d) {
             User::create([
                 'full_name'     => $d[0],
                 'email'         => $d[1],
+                'phone'         => '0812760030' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT),
                 'password_hash' => $password,
                 'role'          => 'dosen',
                 'status'        => 'active',
@@ -106,6 +110,7 @@ class DatabaseSeeder extends Seeder
         User::create([
             'full_name'     => 'Petugas Akademik (BAAK)',
             'email'         => 'baak@roomreserve.ac.id',
+            'phone'         => '081276004001',
             'password_hash' => $password,
             'role'          => 'baak',
             'status'        => 'active',
@@ -114,6 +119,7 @@ class DatabaseSeeder extends Seeder
         $admin = User::create([
             'full_name'     => 'Administrator Sistem',
             'email'         => 'admin@roomreserve.ac.id',
+            'phone'         => '081276005001',
             'password_hash' => $password,
             'role'          => 'admin',
             'status'        => 'active',

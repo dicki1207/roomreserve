@@ -454,4 +454,41 @@ class RoomReserveFlowTest extends TestCase
         $this->assertNotNull($r3->approval);
         $this->assertEquals('DISETUJUI', $r3->approval->decision);
     }
+
+    public function test_profile_access_and_password_update_for_all_roles(): void
+    {
+        $emails = [
+            'mahasiswa@roomreserve.ac.id',
+            'zuliarefendi@roomreserve.ac.id',
+            'kasmawi@roomreserve.ac.id',
+            'baak@roomreserve.ac.id',
+            'admin@roomreserve.ac.id',
+        ];
+
+        foreach ($emails as $email) {
+            $user = User::where('email', $email)->firstOrFail();
+            $this->actingAs($user)->get('/profile')->assertStatus(200);
+        }
+
+        // Kalab dapat melihat Daftar Ruangan dengan status dinamis berbasis tanggal
+        $kalab = User::where('email', 'kasmawi@roomreserve.ac.id')->firstOrFail();
+        $this->actingAs($kalab)->get('/kalab?tab=rooms')->assertStatus(200);
+
+        // Ubah password sendiri gagal jika kata sandi saat ini salah
+        $this->actingAs($kalab)->put('/profile/password', [
+            'current_password'          => 'salah123',
+            'new_password'              => 'baru1234',
+            'new_password_confirmation' => 'baru1234',
+        ])->assertSessionHas('error');
+
+        // Ubah password sendiri berhasil jika kata sandi saat ini cocok
+        $this->actingAs($kalab)->put('/profile/password', [
+            'current_password'          => 'password123',
+            'new_password'              => 'baru1234',
+            'new_password_confirmation' => 'baru1234',
+        ])->assertSessionHas('success');
+
+        $kalab->refresh();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('baru1234', $kalab->password_hash));
+    }
 }

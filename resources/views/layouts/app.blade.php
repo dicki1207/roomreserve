@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoomReserve — @yield('title', 'Sistem Peminjaman Ruangan')</title>
-    <link rel="stylesheet" href="{{ asset('css/roomreserve-tailwind.css') }}?v=4">
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}?v=2">
+    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=2">
+    <link rel="apple-touch-icon" href="{{ asset('images/logo-icon.png') }}?v=2">
+    <link rel="stylesheet" href="{{ asset('css/roomreserve-tailwind.css') }}?v=7">
 </head>
 <body>
 
@@ -28,10 +31,10 @@
                 <div>
                     <div class="sidebar-brand">
                         <a href="{{ route($roleRoute) }}" class="brand-box">
-                            <div class="brand-icon">RR</div>
-                            <div>
-                                <div class="brand-title">RoomReserve</div>
-                                <div class="brand-sub">GKT & Laboratorium TI</div>
+                            <img src="{{ asset('images/logo-icon.png') }}?v=2" alt="RoomReserve" style="width:38px; height:38px; object-fit:contain; flex-shrink:0;">
+                            <div style="min-width:0;">
+                                <img src="{{ asset('images/logo-wordmark-dark.png') }}?v=2" alt="RoomReserve" style="height:20px; width:auto; display:block; margin-bottom:3px;">
+                                <div class="brand-sub">GKT &amp; Laboratorium TI</div>
                             </div>
                         </a>
                     </div>
@@ -66,6 +69,11 @@
                             </a>
 
                         @elseif($user->role === 'kalab')
+                            <a href="{{ route('role.kalab', ['tab' => 'rooms']) }}"
+                               class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
+                                <span>Daftar Ruangan</span>
+                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 18 }}</span>
+                            </a>
                             <a href="{{ route('role.kalab', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
                                 <span>Kalender Ruangan</span>
@@ -82,7 +90,7 @@
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Data Ruangan & Lab</span>
+                                <span>Data Ruangan &amp; Lab</span>
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
@@ -92,25 +100,35 @@
                         @elseif($user->role === 'admin')
                             <a href="{{ route('role.admin', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Cek Kelas & Lab (View)</span>
-                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 17 }}</span>
+                                <span>Cek Kelas &amp; Lab (View)</span>
+                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 18 }}</span>
                             </a>
                             <a href="{{ route('role.admin', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
                                 <span>Kalender Ruangan</span>
                             </a>
                         @endif
+
+                        <a href="{{ route('profile.show') }}"
+                           class="nav-link {{ ($tab ?? '') === 'profile' ? 'active' : '' }}">
+                            <span>Profil Saya</span>
+                        </a>
                     </div>
                 </div>
 
                 <div class="sidebar-footer">
-                    <div class="user-mini">
-                        <div class="user-avatar">{{ strtoupper(substr($user->full_name, 0, 2)) }}</div>
+                    <a href="{{ route('profile.show') }}" class="user-mini" title="Buka Profil Saya">
+                        @if(!empty($user->avatar))
+                            <img src="{{ $user->avatar }}" alt="{{ $user->full_name }}"
+                                 style="width:34px; height:34px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid rgba(96, 165, 250, 0.4);">
+                        @else
+                            <div class="user-avatar">{{ strtoupper(substr($user->full_name, 0, 2)) }}</div>
+                        @endif
                         <div style="min-width:0;">
                             <div class="user-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $user->full_name }}</div>
                             <div class="user-role">{{ $roleLabels[$user->role] ?? ucfirst($user->role) }}</div>
                         </div>
-                    </div>
+                    </a>
                     <a href="{{ route('logout') }}" class="btn btn-slate" style="width:100%; background:#1e293b; color:#cbd5e1; border-color:#334155;">
                         Keluar
                     </a>
@@ -296,11 +314,14 @@
             });
         }
 
-        function openReserveModal(roomId = null) {
+        function openReserveModal(roomId = null, targetDate = null) {
             const modal = document.getElementById('reserve-modal');
             if (!modal) return;
             if (roomId) {
                 document.getElementById('modal-room-select').value = String(roomId);
+            }
+            if (targetDate) {
+                document.getElementById('modal-date').value = targetDate;
             }
             modal.classList.add('show');
             updateRoutingPreview();

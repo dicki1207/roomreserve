@@ -40,7 +40,13 @@
     </div>
 </div>
 
-@if($tab === 'calendar')
+@if($tab === 'rooms')
+    @include('partials.rooms_grid', [
+        'title' => 'Status Ruangan GKT & Laboratorium TI',
+        'routeUrl' => route('role.kalab'),
+        'canBorrow' => false,
+    ])
+@elseif($tab === 'calendar')
     @include('partials.calendar')
 @else
     <div class="grid-main-side">
@@ -101,16 +107,31 @@
         <div style="display:flex; flex-direction:column; gap:18px;">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Laboratorium Saya</div>
+                    <div>
+                        <div class="card-title">Laboratorium Saya</div>
+                        <div style="font-size:11.5px; color:#64748b;">Status hari ini ({{ $selectedDate }} • {{ $nowTime }} WIB)</div>
+                    </div>
                 </div>
                 <div class="card-body">
                     @foreach($myManagedLabs as $lab)
+                        @php
+                            $st = $roomStatuses[$lab->id];
+                            $approvedSlots = $st['approved_slots'];
+                        @endphp
                         <div style="padding:12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; background:#f8fafc;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
                                 <span class="badge badge-navy">{{ $lab->room_code }}</span>
-                                <span style="font-size:12px; color:#64748b;">Lantai {{ $lab->floor }} • {{ $lab->capacity }} Unit</span>
+                                <span class="badge {{ $st['badge_class'] }}">{{ $st['badge_label'] }}</span>
                             </div>
                             <div style="font-weight:600; color:#0f172a;">{{ $lab->room_name }}</div>
+                            <div style="font-size:12px; color:#64748b; margin-top:2px;">Lantai {{ $lab->floor }} • {{ $lab->capacity }} Unit</div>
+                            @if($approvedSlots->isNotEmpty() && $lab->status === 'available')
+                                <div style="margin-top:8px; padding:6px 9px; border-radius:6px; background:#fffbeb; border:1px solid #fde68a; font-size:11.5px; color:#92400e;">
+                                    @foreach($approvedSlots as $slot)
+                                        <div>• Dipinjam {{ $slot->start_time }}–{{ $slot->end_time }} WIB ({{ $slot->requester->full_name }})</div>
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>

@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\Hash;
 class RoomReserveController extends Controller
 {
     /**
-     * Data umum yang dibutuhkan oleh komponen kalender & modal pengajuan
+     * Data umum yang dibutuhkan oleh komponen kalender, daftar ruangan (berbasis tanggal & jam WIB), & modal pengajuan
      */
-    private function sharedViewData(): array
+    private function sharedViewData(?Request $request = null): array
     {
         $allRooms = Room::with(['building', 'labManager.kalab'])
             ->orderBy('building_id')
@@ -37,7 +37,96 @@ class RoomReserveController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        return compact('allRooms', 'allSchedules', 'allReservations');
+        $today = now()->format('Y-m-d');
+        $nowTime = now()->format('H:i');
+        $rawDate = $request ? trim((string) $request->query('date', '')) : '';
+        $selectedDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawDate) ? $rawDate : $today;
+        $isToday = ($selectedDate === $today);
+
+        $roomStatuses = [];
+        foreach ($allRooms as $r) {
+            $dayApproved = $allReservations
+                ->filter(fn($res) => (int) $res->room_id === (int) $r->id
+                    && $res->status === 'DISETUJUI'
+                    && $res->reservation_date === $selectedDate)
+                ->sortBy('start_time')
+                ->values();
+
+            $daySchedules = $allSchedules
+                ->filter(fn($cs) => (int) $cs->room_id === (int) $r->id
+                    && $cs->schedule_date === $selectedDate)
+                ->sortBy('start_time')
+                ->values();
+
+            $activeBookingNow = $isToday
+                ? $dayApproved->first(fn($res) => $res->start_time <= $nowTime && $res->end_time > $nowTime)
+                : null;
+
+            $activeClassNow = $isToday
+                ? $daySchedules->first(fn($cs) => $cs->start_time <= $nowTime && $cs->end_time > $nowTime)
+                : null;
+
+            $relevantApproved = $isToday
+                ? $dayApproved->filter(fn($res) => $res->end_time > $nowTime)->values()
+                : $dayApproved;
+
+            $relevantSchedules = $isToday
+                ? $daySchedules->filter(fn($cs) => $cs->end_time > $nowTime)->values()
+                : $daySchedules;
+
+            if ($r->status !== 'available') {
+                $badgeClass = 'badge-rose';
+                $badgeLabel = 'Perbaikan';
+                $isBusyNow = true;
+            } elseif ($activeBookingNow) {
+                $badgeClass = 'badge-amber';
+                $badgeLabel = "Dipinjam ({$activeBookingNow->start_time}–{$activeBookingNow->end_time} WIB)";
+                $isBusyNow = true;
+            } elseif ($activeClassNow) {
+                $badgeClass = 'badge-royal';
+                $badgeLabel = "Dipakai Kuliah ({$activeClassNow->start_time}–{$activeClassNow->end_time} WIB)";
+                $isBusyNow = true;
+            } elseif (!$isToday && $relevantApproved->isNotEmpty()) {
+                $first = $relevantApproved->first();
+                $badgeClass = 'badge-amber';
+                $badgeLabel = $relevantApproved->count() === 1
+                    ? "Dipinjam ({$first->start_time}–{$first->end_time} WIB)"
+                    : "Dipinjam ({$relevantApproved->count()} jadwal)";
+                $isBusyNow = false;
+            } elseif (!$isToday && $relevantSchedules->isNotEmpty()) {
+                $firstCs = $relevantSchedules->first();
+                $badgeClass = 'badge-royal';
+                $badgeLabel = $relevantSchedules->count() === 1
+                    ? "Ada Kuliah ({$firstCs->start_time}–{$firstCs->end_time} WIB)"
+                    : "Ada Kuliah ({$relevantSchedules->count()} jadwal)";
+                $isBusyNow = false;
+            } else {
+                $badgeClass = 'badge-emerald';
+                $badgeLabel = 'Tersedia';
+                $isBusyNow = false;
+            }
+
+            $roomStatuses[$r->id] = [
+                'badge_class'    => $badgeClass,
+                'badge_label'    => $badgeLabel,
+                'is_busy_now'    => $isBusyNow,
+                'active_booking' => $activeBookingNow,
+                'active_class'   => $activeClassNow,
+                'approved_slots' => $relevantApproved,
+                'class_slots'    => $relevantSchedules,
+            ];
+        }
+
+        return compact(
+            'allRooms',
+            'allSchedules',
+            'allReservations',
+            'today',
+            'nowTime',
+            'selectedDate',
+            'isToday',
+            'roomStatuses'
+        );
     }
 
     // =========================================================================
@@ -45,7 +134,7 @@ class RoomReserveController extends Controller
     // =========================================================================
     public function mahasiswaDashboard(Request $request)
     {
-        $data = $this->sharedViewData();
+        $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['myReservations'] = Reservation::with(['room.building', 'approval.approver'])
             ->where('requester_id', Auth::id())
@@ -60,7 +149,7 @@ class RoomReserveController extends Controller
     // =========================================================================
     public function dosenDashboard(Request $request)
     {
-        $data = $this->sharedViewData();
+        $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['myLectures'] = ClassSchedule::with('room')
             ->where('lecturer_id', Auth::id())
@@ -85,11 +174,11 @@ class RoomReserveController extends Controller
     }
 
     // =========================================================================
-    // 3. TAMPILAN KHUSUS ROLE: KEPALA LABORATORIUM / KALAB (9 LAB TI)
+    // 3. TAMPILAN KHUSUS ROLE: KEPALA LABORATORIUM / KALAB (10 LAB TI)
     // =========================================================================
     public function kalabDashboard(Request $request)
     {
-        $data = $this->sharedViewData();
+        $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['myManagedLabs'] = Room::with('building')
             ->whereHas('labManager', fn($q) => $q->where('user_id', Auth::id()))
@@ -289,7 +378,7 @@ class RoomReserveController extends Controller
     // =========================================================================
     public function baakDashboard(Request $request)
     {
-        $data = $this->sharedViewData();
+        $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['lecturers'] = User::where('role', 'dosen')->orderBy('full_name')->get();
         $data['kalabUsers'] = User::where('role', 'kalab')->orderBy('full_name')->get();
@@ -309,7 +398,7 @@ class RoomReserveController extends Controller
     // =========================================================================
     public function adminDashboard(Request $request)
     {
-        $data = $this->sharedViewData();
+        $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['staffUsers'] = User::whereIn('role', ['dosen', 'kalab', 'baak'])->orderBy('id')->get();
         $data['adminUsers'] = User::where('role', 'admin')->orderBy('id')->get();
@@ -824,12 +913,14 @@ class RoomReserveController extends Controller
         $request->validate([
             'full_name' => 'required|string|max:120',
             'email'     => 'required|email|unique:users,email',
+            'phone'     => 'nullable|string|max:30',
             'password'  => 'required|string|min:4',
         ]);
 
         $student = User::create([
             'full_name'     => trim($request->input('full_name')),
             'email'         => trim($request->input('email')),
+            'phone'         => $request->filled('phone') ? trim($request->input('phone')) : null,
             'password_hash' => Hash::make($request->input('password')),
             'role'          => 'mahasiswa',
             'status'        => 'active',
@@ -854,6 +945,7 @@ class RoomReserveController extends Controller
         $request->validate([
             'full_name' => 'required|string|max:120',
             'email'     => 'required|email|unique:users,email,' . $student->id,
+            'phone'     => 'nullable|string|max:30',
             'status'    => 'required|in:active,inactive',
             'password'  => 'nullable|string|min:4',
         ]);
@@ -861,6 +953,7 @@ class RoomReserveController extends Controller
         $data = [
             'full_name' => trim($request->input('full_name')),
             'email'     => trim($request->input('email')),
+            'phone'     => $request->filled('phone') ? trim($request->input('phone')) : $student->phone,
             'status'    => $request->input('status'),
         ];
 
@@ -951,6 +1044,7 @@ class RoomReserveController extends Controller
         $request->validate([
             'full_name' => 'required|string|max:120',
             'email'     => 'required|email|unique:users,email',
+            'phone'     => 'nullable|string|max:30',
             'password'  => 'required|string|min:4',
             'role'      => 'required|in:dosen,kalab,baak',
         ]);
@@ -958,6 +1052,7 @@ class RoomReserveController extends Controller
         $newUser = User::create([
             'full_name'     => $request->input('full_name'),
             'email'         => $request->input('email'),
+            'phone'         => $request->filled('phone') ? trim($request->input('phone')) : null,
             'password_hash' => Hash::make($request->input('password')),
             'role'          => $request->input('role'),
             'status'        => 'active',
@@ -989,6 +1084,7 @@ class RoomReserveController extends Controller
         $request->validate([
             'full_name' => 'required|string|max:120',
             'email'     => 'required|email|unique:users,email,' . $user->id,
+            'phone'     => 'nullable|string|max:30',
             'role'      => 'required|in:dosen,kalab,baak',
             'status'    => 'required|in:active,inactive',
             'password'  => 'nullable|string|min:4',
@@ -997,6 +1093,7 @@ class RoomReserveController extends Controller
         $data = [
             'full_name' => $request->input('full_name'),
             'email'     => $request->input('email'),
+            'phone'     => $request->filled('phone') ? trim($request->input('phone')) : $user->phone,
             'role'      => $request->input('role'),
             'status'    => $request->input('status'),
         ];
@@ -1101,6 +1198,108 @@ class RoomReserveController extends Controller
         ]);
 
         return back()->with('success', 'Penugasan Kepala Laboratorium berhasil diperbarui.');
+    }
+
+    // =========================================================================
+    // 6. PROFIL SAYA (DOSEN, KALAB, BAAK, MAHASISWA, & ADMIN)
+    // =========================================================================
+    public function showProfile(Request $request)
+    {
+        $data = $this->sharedViewData($request);
+        $user = Auth::user();
+        $data['tab'] = 'profile';
+        $data['profileUser'] = $user;
+
+        $data['myManagedLabs'] = $user->role === 'kalab'
+            ? Room::with('building')->whereHas('labManager', fn($q) => $q->where('user_id', $user->id))->orderBy('room_code')->get()
+            : collect();
+
+        $data['myTeachingCount'] = $user->role === 'dosen'
+            ? ClassSchedule::where('lecturer_id', $user->id)->count()
+            : 0;
+
+        $data['myReservationCount'] = Reservation::where('requester_id', $user->id)->count();
+        $data['myApprovalCount'] = Approval::where('approver_id', $user->id)
+            ->whereIn('decision', ['DISETUJUI', 'DITOLAK'])
+            ->count();
+
+        return view('profile', $data);
+    }
+
+    public function updateProfileAvatar(Request $request)
+    {
+        $request->validate([
+            'avatar' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ], [
+            'avatar.required' => 'Pilih file gambar terlebih dahulu.',
+            'avatar.image'    => 'File harus berupa gambar (JPG, PNG, atau WebP).',
+            'avatar.max'      => 'Ukuran foto profil maksimal 2 MB.',
+        ]);
+
+        $user = Auth::user();
+        $file = $request->file('avatar');
+        $uploadDir = public_path('uploads/avatars');
+
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        if ($user->avatar) {
+            $oldPath = public_path(ltrim($user->avatar, '/'));
+            if (is_file($oldPath)) {
+                @unlink($oldPath);
+            }
+        }
+
+        $filename = 'user_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $file->move($uploadDir, $filename);
+
+        $user->update([
+            'avatar' => '/uploads/avatars/' . $filename,
+        ]);
+
+        AuditLog::create([
+            'user_id'    => $user->id,
+            'action'     => "UPDATE_PROFILE_AVATAR ({$user->email})",
+            'entity'     => 'USERS',
+            'entity_id'  => $user->id,
+            'created_at' => now(),
+        ]);
+
+        return back()->with('success', 'Foto profil Anda berhasil diperbarui.');
+    }
+
+    public function updateProfilePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password'     => 'required|string|min:4|confirmed',
+        ], [
+            'current_password.required' => 'Kata sandi saat ini wajib diisi.',
+            'new_password.required'     => 'Kata sandi baru wajib diisi.',
+            'new_password.min'          => 'Kata sandi baru minimal 4 karakter.',
+            'new_password.confirmed'    => 'Konfirmasi kata sandi baru tidak cocok.',
+        ]);
+
+        $user = Auth::user();
+
+        if (!Hash::check($request->input('current_password'), $user->password_hash)) {
+            return back()->with('error', 'Kata sandi saat ini tidak sesuai. Silakan periksa kembali.');
+        }
+
+        $user->update([
+            'password_hash' => Hash::make($request->input('new_password')),
+        ]);
+
+        AuditLog::create([
+            'user_id'    => $user->id,
+            'action'     => "UPDATE_OWN_PASSWORD ({$user->email})",
+            'entity'     => 'USERS',
+            'entity_id'  => $user->id,
+            'created_at' => now(),
+        ]);
+
+        return back()->with('success', 'Kata sandi akun Anda berhasil diperbarui.');
     }
 
     public function resetSeeder()

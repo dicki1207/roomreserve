@@ -13,6 +13,8 @@ return new class extends Migration
             $table->id();
             $table->string('full_name', 120);
             $table->string('email', 120)->unique();
+            $table->string('phone', 30)->nullable();
+            $table->string('avatar', 255)->nullable();
             $table->string('password_hash');
             $table->string('role', 30)->default('mahasiswa'); // mahasiswa, dosen, kalab, baak, admin
             $table->string('status', 20)->default('active');

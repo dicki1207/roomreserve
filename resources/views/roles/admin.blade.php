@@ -52,14 +52,24 @@
 @elseif($tab === 'rooms')
     <!-- VIEW-ONLY: CEK SEMUA KELAS GKT & LABORATORIUM TI -->
     <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="flex-wrap:wrap; gap:12px;">
             <div>
-                <div class="card-title">Status Seluruh Ruang Kelas GKT & Laboratorium Gedung TI (Hanya Lihat / View Only)</div>
+                <div class="card-title">Status Seluruh Ruang Kelas GKT &amp; Laboratorium Gedung TI (Hanya Lihat / View Only)</div>
                 <div style="font-size:12px; color:#64748b; margin-top:2px;">
-                    Administrator hanya memantau ketersediaan ruangan. Perubahan status ruangan/laboratorium dikelola oleh BAAK.
+                    Status khusus tanggal <strong>{{ $selectedDate }}</strong>
+                    @if($isToday) (Hari Ini • {{ $nowTime }} WIB) @endif
+                    — Perubahan status ruangan dikelola oleh BAAK.
                 </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <form method="GET" action="{{ route('role.admin') }}" style="display:flex; gap:6px; align-items:center;">
+                    <input type="hidden" name="tab" value="rooms">
+                    <label style="font-size:12px; color:#475569; font-weight:600;">Tanggal:</label>
+                    <input type="date" name="date" value="{{ $selectedDate }}" onchange="this.form.submit()" class="form-control" style="padding:5px 9px; font-size:12px; width:auto;">
+                    @if(!$isToday)
+                        <a href="{{ route('role.admin', ['tab' => 'rooms']) }}" class="btn btn-slate" style="padding:5px 9px; font-size:11.5px;">Hari Ini</a>
+                    @endif
+                </form>
                 <button type="button" onclick="filterRooms('ALL')" id="filter-ALL" class="btn btn-navy">Semua ({{ $allRooms->count() }})</button>
                 <button type="button" onclick="filterRooms('GKT')" id="filter-GKT" class="btn btn-slate">Kelas GKT ({{ $allRooms->where('building.name', 'GKT')->count() }})</button>
                 <button type="button" onclick="filterRooms('TI')" id="filter-TI" class="btn btn-slate">Lab Gedung TI ({{ $allRooms->where('building.name', 'TI')->count() }})</button>
@@ -71,18 +81,19 @@
                     <tr>
                         <th>Kode</th>
                         <th>Nama Kelas / Laboratorium</th>
-                        <th>Gedung & Lantai</th>
+                        <th>Gedung &amp; Lantai</th>
                         <th>Kapasitas</th>
                         <th>Penanggung Jawab</th>
-                        <th>Jadwal / Peminjaman Aktif</th>
+                        <th>Jadwal pada {{ $selectedDate }}</th>
                         <th>Status Ruangan</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($allRooms as $r)
                         @php
-                            $activeApprovedCount = $allReservations->where('room_id', $r->id)->where('status', 'DISETUJUI')->count();
-                            $activeScheduleCount = $allSchedules->where('room_id', $r->id)->count();
+                            $st = $roomStatuses[$r->id];
+                            $approvedSlots = $st['approved_slots'];
+                            $classSlots = $st['class_slots'];
                         @endphp
                         <tr class="room-card" data-building="{{ $r->building->name }}">
                             <td><span class="badge badge-navy">{{ $r->room_code }}</span></td>
@@ -100,17 +111,22 @@
                                 @endif
                             </td>
                             <td>
-                                @if($activeApprovedCount > 0 || $activeScheduleCount > 0)
-                                    <span class="badge badge-royal">
-                                        {{ $activeScheduleCount }} Kuliah • {{ $activeApprovedCount }} Peminjaman
-                                    </span>
+                                @if($approvedSlots->isNotEmpty() || $classSlots->isNotEmpty())
+                                    <div style="display:flex; flex-direction:column; gap:3px; font-size:12px;">
+                                        @foreach($approvedSlots as $slot)
+                                            <span style="color:#b45309; font-weight:600;">• Dipinjam {{ $slot->start_time }}–{{ $slot->end_time }} WIB</span>
+                                        @endforeach
+                                        @foreach($classSlots as $cs)
+                                            <span style="color:#1e40af; font-weight:600;">• Kuliah {{ $cs->start_time }}–{{ $cs->end_time }} WIB</span>
+                                        @endforeach
+                                    </div>
                                 @else
-                                    <span style="color:#64748b; font-size:12px;">Kosong / Tidak ada jadwal</span>
+                                    <span style="color:#64748b; font-size:12px;">Kosong pada tanggal ini</span>
                                 @endif
                             </td>
                             <td>
-                                <span class="badge {{ $r->status === 'available' ? 'badge-emerald' : 'badge-rose' }}">
-                                    {{ $r->status === 'available' ? 'Ada / Tersedia' : 'Tidak Tersedia (Perbaikan)' }}
+                                <span class="badge {{ $st['badge_class'] }}">
+                                    {{ $st['badge_label'] }}
                                 </span>
                             </td>
                         </tr>
@@ -138,25 +154,19 @@
                         <thead>
                             <tr>
                                 <th>Nama Lengkap</th>
-                                <th>Email</th>
-                                <th>Role</th>
+                                <th>Email &amp; Nomor HP Terdaftar</th>
                                 <th>Status</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($staffUsers as $u)
-                                @php
-                                    $bMap = [
-                                        'dosen' => 'badge-navy',
-                                        'kalab' => 'badge-cyan',
-                                        'baak'  => 'badge-emerald',
-                                    ];
-                                @endphp
                                 <tr>
                                     <td><strong>{{ $u->full_name }}</strong></td>
-                                    <td>{{ $u->email }}</td>
-                                    <td><span class="badge {{ $bMap[$u->role] ?? 'badge-royal' }}">{{ strtoupper($u->role) }}</span></td>
+                                    <td>
+                                        <div>{{ $u->email }}</div>
+                                        <div style="font-size:11.5px; color:#64748b; margin-top:2px;">HP: <strong>{{ $u->phone ?: 'Belum diisi' }}</strong></div>
+                                    </td>
                                     <td>
                                         <span class="badge {{ $u->status === 'active' ? 'badge-emerald' : 'badge-rose' }}">
                                             {{ $u->status === 'active' ? 'Aktif' : 'Nonaktif' }}
@@ -165,12 +175,12 @@
                                     <td>
                                         <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                             <button type="button"
-                                                    onclick="openResetStaffPasswordModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ strtoupper($u->role) }}')"
+                                                    onclick="openResetStaffPasswordModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ addslashes($u->phone ?? '') }}')"
                                                     class="btn btn-navy" style="padding:3px 8px; font-size:11px;">
                                                 Perbarui Password (WA)
                                             </button>
                                             <button type="button"
-                                                    onclick="openEditUserModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ $u->role }}', '{{ $u->status }}')"
+                                                    onclick="openEditUserModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ addslashes($u->phone ?? '') }}', '{{ $u->role }}', '{{ $u->status }}')"
                                                     class="btn btn-slate" style="padding:3px 8px; font-size:11px;">
                                                 Edit Akun
                                             </button>
@@ -210,13 +220,14 @@
                         </thead>
                         <tbody>
                             @foreach($allRooms as $r)
+                                @php $st = $roomStatuses[$r->id]; @endphp
                                 <tr>
                                     <td><span class="badge badge-navy">{{ $r->room_code }}</span></td>
                                     <td><strong>{{ $r->room_name }}</strong></td>
                                     <td>Gedung {{ $r->building->name }} • Lt. {{ $r->floor }}</td>
                                     <td>
-                                        <span class="badge {{ $r->status === 'available' ? 'badge-emerald' : 'badge-rose' }}">
-                                            {{ $r->status === 'available' ? 'Ada / Tersedia' : 'Perbaikan' }}
+                                        <span class="badge {{ $st['badge_class'] }}">
+                                            {{ $st['badge_label'] }}
                                         </span>
                                     </td>
                                 </tr>
@@ -242,6 +253,10 @@
                     <div class="form-group">
                         <label class="form-label">Email</label>
                         <input type="email" name="email" required placeholder="nama@roomreserve.ac.id" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nomor HP Terdaftar</label>
+                        <input type="text" name="phone" required placeholder="Contoh: 081234567890" class="form-control">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Kata Sandi</label>
@@ -322,6 +337,10 @@
                     <input type="email" name="email" id="edit-user-email" required class="form-control">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Nomor HP Terdaftar</label>
+                    <input type="text" name="phone" id="edit-user-phone" placeholder="0812xxxxxxxx" class="form-control">
+                </div>
+                <div class="form-group">
                     <label class="form-label">Reset Kata Sandi (Kosongkan jika tidak diubah)</label>
                     <input type="password" name="password" placeholder="Minimal 4 karakter" class="form-control">
                 </div>
@@ -361,15 +380,15 @@
                 <div style="padding:11px 13px; border-radius:8px; background:#eff6ff; border:1px solid #bfdbfe; font-size:12.5px; color:#1e293b; margin-bottom:14px;">
                     <div><strong>Nama:</strong> <span id="reset-staff-name"></span></div>
                     <div><strong>Email:</strong> <span id="reset-staff-email"></span></div>
-                    <div><strong>Role:</strong> <span id="reset-staff-role" class="badge badge-navy"></span></div>
+                    <div><strong>Nomor HP Terdaftar:</strong> <span id="reset-staff-phone-display" style="color:#1d4ed8; font-weight:700;"></span></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Password Baru</label>
                     <input type="text" name="password" id="reset-staff-password" value="password123" required class="form-control">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Nomor WhatsApp Penerima (Opsional untuk Kirim Info WA)</label>
-                    <input type="text" id="reset-staff-phone" placeholder="Contoh: 6281234567890" class="form-control">
+                    <label class="form-label">Nomor WhatsApp Penerima (Terisi Otomatis dari Nomor HP Terdaftar)</label>
+                    <input type="text" id="reset-staff-phone" placeholder="Contoh: 081234567890" class="form-control">
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-top:12px; border-top:1px solid #e2e8f0; flex-wrap:wrap;">
                     <button type="button" onclick="sendStaffResetWhatsApp()" class="btn btn-emerald">
@@ -385,12 +404,13 @@
     </div>
 
     <script>
-    function openResetStaffPasswordModal(id, name, email, role) {
+    function openResetStaffPasswordModal(id, name, email, phone) {
         const modal = document.getElementById('reset-staff-pw-modal');
         document.getElementById('reset-staff-pw-form').action = '/admin/users/' + id + '/password';
         document.getElementById('reset-staff-name').textContent = name;
         document.getElementById('reset-staff-email').textContent = email;
-        document.getElementById('reset-staff-role').textContent = role;
+        document.getElementById('reset-staff-phone-display').textContent = phone || 'Belum tercatat';
+        document.getElementById('reset-staff-phone').value = phone || '';
         document.getElementById('reset-staff-password').value = 'password123';
         modal.classList.add('show');
     }
@@ -400,19 +420,20 @@
     function sendStaffResetWhatsApp() {
         const name = document.getElementById('reset-staff-name').textContent;
         const email = document.getElementById('reset-staff-email').textContent;
-        const role = document.getElementById('reset-staff-role').textContent;
         const pass = document.getElementById('reset-staff-password').value;
-        const phone = document.getElementById('reset-staff-phone').value.replace(/[^0-9]/g, '');
-        const msg = 'Halo ' + name + ', berikut informasi perbaikan akun RoomReserve Anda:\n- Role: *' + role + '*\n- Email: ' + email + '\n- Password Baru: *' + pass + '*\nSilakan masuk kembali sesuai role Anda.';
+        let phone = document.getElementById('reset-staff-phone').value.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+        const msg = 'Halo ' + name + ', berikut informasi perbaikan kata sandi akun RoomReserve Anda:\n- Email: ' + email + '\n- Password Baru: *' + pass + '*\nSilakan masuk kembali ke sistem.';
         const url = (phone ? 'https://wa.me/' + phone : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
         window.open(url, '_blank');
     }
 
-    function openEditUserModal(id, name, email, role, status) {
+    function openEditUserModal(id, name, email, phone, role, status) {
         const modal = document.getElementById('edit-user-modal');
         document.getElementById('edit-user-form').action = '/admin/users/' + id;
         document.getElementById('edit-user-name').value = name;
         document.getElementById('edit-user-email').value = email;
+        document.getElementById('edit-user-phone').value = phone || '';
         document.getElementById('edit-user-role').value = role;
         document.getElementById('edit-user-status').value = status;
         modal.classList.add('show');
