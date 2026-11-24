@@ -6,6 +6,7 @@ use App\Models\Approval;
 use App\Models\AuditLog;
 use App\Models\ClassSchedule;
 use App\Models\LabManager;
+use App\Models\PasswordResetRequest;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\User;
@@ -382,7 +383,12 @@ class RoomReserveController extends Controller
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['lecturers'] = User::where('role', 'dosen')->orderBy('full_name')->get();
         $data['kalabUsers'] = User::where('role', 'kalab')->orderBy('full_name')->get();
-        $data['students'] = User::where('role', 'mahasiswa')->orderBy('id')->get();
+        $data['students'] = User::with('pendingPasswordReset')->where('role', 'mahasiswa')->orderBy('id')->get();
+        $data['pendingStudentResets'] = PasswordResetRequest::with('user')
+            ->where('target_handler', 'BAAK')
+            ->where('status', 'MENUNGGU')
+            ->orderByDesc('id')
+            ->get();
         $data['gktRooms'] = $data['allRooms']->filter(fn($r) => $r->building->name === 'GKT');
         $data['courseOptions'] = $this->courseOptions();
         $data['classOptions'] = $this->classOptions();
@@ -400,7 +406,12 @@ class RoomReserveController extends Controller
     {
         $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
-        $data['staffUsers'] = User::whereIn('role', ['dosen', 'kalab', 'baak'])->orderBy('id')->get();
+        $data['staffUsers'] = User::with('pendingPasswordReset')->whereIn('role', ['dosen', 'kalab', 'baak'])->orderBy('id')->get();
+        $data['pendingStaffResets'] = PasswordResetRequest::with('user')
+            ->where('target_handler', 'ADMIN')
+            ->where('status', 'MENUNGGU')
+            ->orderByDesc('id')
+            ->get();
         $data['adminUsers'] = User::where('role', 'admin')->orderBy('id')->get();
         $data['auditLogs'] = AuditLog::with('user')->orderByDesc('id')->limit(40)->get();
 
@@ -944,24 +955,15 @@ class RoomReserveController extends Controller
 
         $request->validate([
             'full_name' => 'required|string|max:120',
-            'email'     => 'required|email|unique:users,email,' . $student->id,
-            'phone'     => 'nullable|string|max:30',
             'status'    => 'required|in:active,inactive',
-            'password'  => 'nullable|string|min:4',
         ]);
 
-        $data = [
+        // Keamanan Opsi B (Immutable Recovery Key):
+        // Email, Nomor HP Terdaftar, dan Kata Sandi DIKUNCI di form Edit Akun agar tidak dapat dimanipulasi.
+        $student->update([
             'full_name' => trim($request->input('full_name')),
-            'email'     => trim($request->input('email')),
-            'phone'     => $request->filled('phone') ? trim($request->input('phone')) : $student->phone,
             'status'    => $request->input('status'),
-        ];
-
-        if ($request->filled('password')) {
-            $data['password_hash'] = Hash::make($request->input('password'));
-        }
-
-        $student->update($data);
+        ]);
 
         AuditLog::create([
             'user_id'    => Auth::id(),
@@ -972,7 +974,7 @@ class RoomReserveController extends Controller
         ]);
 
         return redirect()->route('role.baak', ['tab' => 'students'])
-            ->with('success', "Data akun mahasiswa {$student->full_name} berhasil diperbarui.");
+            ->with('success', "Data akun mahasiswa {$student->full_name} berhasil diperbarui (Email & Nomor HP tetap terkunci).");
     }
 
     public function destroyMahasiswa($id)
@@ -1003,6 +1005,18 @@ class RoomReserveController extends Controller
     {
         $student = User::where('id', $id)->where('role', 'mahasiswa')->firstOrFail();
 
+        // KEAMANAN WAJIB: Hanya boleh ubah password jika ada tiket aktif dari halaman Lupa Kata Sandi
+        $ticket = PasswordResetRequest::where('user_id', $student->id)
+            ->where('target_handler', 'BAAK')
+            ->where('status', 'MENUNGGU')
+            ->latest('id')
+            ->first();
+
+        if (!$ticket) {
+            return redirect()->route('role.baak', ['tab' => 'students'])
+                ->with('error', "Akses Ditolak: Kata sandi {$student->full_name} tidak dapat diubah karena belum ada permintaan reset kata sandi yang diajukan dari halaman Lupa Kata Sandi.");
+        }
+
         $request->validate([
             'password'           => 'required|string|min:4',
             'verification_notes' => 'nullable|string|max:250',
@@ -1011,20 +1025,62 @@ class RoomReserveController extends Controller
         $newPassword = $request->input('password');
         $verif = trim((string) $request->input('verification_notes', 'Verifikasi langsung di BAAK (Komting Kelas / Organisasi)'));
 
-        $student->update([
-            'password_hash' => Hash::make($newPassword),
+        DB::transaction(function () use ($student, $ticket, $newPassword, $verif) {
+            $student->update([
+                'password_hash' => Hash::make($newPassword),
+            ]);
+
+            $ticket->update([
+                'status'        => 'SELESAI',
+                'handled_by'    => Auth::id(),
+                'handled_notes' => $verif,
+                'handled_at'    => now(),
+            ]);
+
+            AuditLog::create([
+                'user_id'    => Auth::id(),
+                'action'     => "BAAK_RESET_PASSWORD_MAHASISWA (#PR-{$ticket->id} {$student->full_name} — {$verif})",
+                'entity'     => 'PASSWORD_RESET_REQUESTS',
+                'entity_id'  => $ticket->id,
+                'created_at' => now(),
+            ]);
+        });
+
+        return redirect()->route('role.baak', ['tab' => 'students'])
+            ->with('success', "Tiket #PR-{$ticket->id} selesai: Password untuk {$student->full_name} ({$student->email}) berhasil diperbarui oleh BAAK.");
+    }
+
+    public function rejectMahasiswaPasswordReset($id)
+    {
+        $student = User::where('id', $id)->where('role', 'mahasiswa')->firstOrFail();
+        $ticket = PasswordResetRequest::where('user_id', $student->id)
+            ->where('target_handler', 'BAAK')
+            ->where('status', 'MENUNGGU')
+            ->latest('id')
+            ->first();
+
+        if (!$ticket) {
+            return redirect()->route('role.baak', ['tab' => 'students'])
+                ->with('error', 'Tidak ditemukan permintaan reset kata sandi yang aktif.');
+        }
+
+        $ticket->update([
+            'status'        => 'DITOLAK',
+            'handled_by'    => Auth::id(),
+            'handled_notes' => 'Permintaan reset ditolak / dibatalkan oleh BAAK.',
+            'handled_at'    => now(),
         ]);
 
         AuditLog::create([
             'user_id'    => Auth::id(),
-            'action'     => "BAAK_RESET_PASSWORD_MAHASISWA ({$student->full_name} — {$verif})",
-            'entity'     => 'USERS',
-            'entity_id'  => $student->id,
+            'action'     => "BAAK_REJECT_PASSWORD_RESET (#PR-{$ticket->id} {$student->email})",
+            'entity'     => 'PASSWORD_RESET_REQUESTS',
+            'entity_id'  => $ticket->id,
             'created_at' => now(),
         ]);
 
         return redirect()->route('role.baak', ['tab' => 'students'])
-            ->with('success', "Password untuk {$student->full_name} ({$student->email}) berhasil diperbarui oleh BAAK.");
+            ->with('success', "Permintaan reset kata sandi #PR-{$ticket->id} untuk {$student->full_name} telah dibatalkan.");
     }
 
     // =========================================================================
@@ -1083,26 +1139,17 @@ class RoomReserveController extends Controller
 
         $request->validate([
             'full_name' => 'required|string|max:120',
-            'email'     => 'required|email|unique:users,email,' . $user->id,
-            'phone'     => 'nullable|string|max:30',
             'role'      => 'required|in:dosen,kalab,baak',
             'status'    => 'required|in:active,inactive',
-            'password'  => 'nullable|string|min:4',
         ]);
 
-        $data = [
-            'full_name' => $request->input('full_name'),
-            'email'     => $request->input('email'),
-            'phone'     => $request->filled('phone') ? trim($request->input('phone')) : $user->phone,
+        // Keamanan Opsi B (Immutable Recovery Key):
+        // Email, Nomor HP Terdaftar, dan Kata Sandi DIKUNCI di form Edit Akun agar tidak dapat dimanipulasi.
+        $user->update([
+            'full_name' => trim($request->input('full_name')),
             'role'      => $request->input('role'),
             'status'    => $request->input('status'),
-        ];
-
-        if ($request->filled('password')) {
-            $data['password_hash'] = Hash::make($request->input('password'));
-        }
-
-        $user->update($data);
+        ]);
 
         AuditLog::create([
             'user_id'    => Auth::id(),
@@ -1112,7 +1159,7 @@ class RoomReserveController extends Controller
             'created_at' => now(),
         ]);
 
-        return back()->with('success', "Akun {$user->full_name} berhasil diperbarui.");
+        return back()->with('success', "Akun {$user->full_name} berhasil diperbarui (Email & Nomor HP tetap terkunci).");
     }
 
     public function resetStaffPassword(Request $request, $id)
@@ -1123,27 +1170,82 @@ class RoomReserveController extends Controller
             return back()->with('error', 'Administrator hanya dapat memperbarui kata sandi untuk akun Dosen, Kalab, atau BAAK.');
         }
 
+        // KEAMANAN WAJIB: Hanya boleh ubah password jika user telah mengajukan permintaan dari halaman Lupa Kata Sandi
+        $ticket = PasswordResetRequest::where('user_id', $user->id)
+            ->where('target_handler', 'ADMIN')
+            ->where('status', 'MENUNGGU')
+            ->latest('id')
+            ->first();
+
+        if (!$ticket) {
+            return back()->with(
+                'error',
+                "Akses Ditolak: Kata sandi {$user->full_name} tidak dapat diubah karena pengguna tidak mengajukan permintaan reset dari halaman Lupa Kata Sandi."
+            );
+        }
+
         $request->validate([
             'password' => 'required|string|min:4',
         ]);
 
         $newPassword = $request->input('password');
-        $user->update([
-            'password_hash' => Hash::make($newPassword),
+
+        DB::transaction(function () use ($user, $ticket, $newPassword) {
+            $user->update([
+                'password_hash' => Hash::make($newPassword),
+            ]);
+
+            $ticket->update([
+                'status'        => 'SELESAI',
+                'handled_by'    => Auth::id(),
+                'handled_notes' => 'Password diperbarui oleh Administrator sesuai tiket konfirmasi WA.',
+                'handled_at'    => now(),
+            ]);
+
+            AuditLog::create([
+                'user_id'    => Auth::id(),
+                'action'     => "ADMIN_RESET_PASSWORD_STAFF (#PR-{$ticket->id} {$user->full_name} via Konfirmasi WA)",
+                'entity'     => 'PASSWORD_RESET_REQUESTS',
+                'entity_id'  => $ticket->id,
+                'created_at' => now(),
+            ]);
+        });
+
+        return back()->with(
+            'success',
+            "Tiket #PR-{$ticket->id} selesai: Password akun {$user->full_name} berhasil diperbarui menjadi \"{$newPassword}\". Silakan informasikan kembali via WhatsApp."
+        );
+    }
+
+    public function rejectStaffPasswordReset($id)
+    {
+        $user = User::findOrFail($id);
+        $ticket = PasswordResetRequest::where('user_id', $user->id)
+            ->where('target_handler', 'ADMIN')
+            ->where('status', 'MENUNGGU')
+            ->latest('id')
+            ->first();
+
+        if (!$ticket) {
+            return back()->with('error', 'Tidak ditemukan permintaan reset kata sandi yang aktif.');
+        }
+
+        $ticket->update([
+            'status'        => 'DITOLAK',
+            'handled_by'    => Auth::id(),
+            'handled_notes' => 'Permintaan reset ditolak / dibatalkan oleh Administrator.',
+            'handled_at'    => now(),
         ]);
 
         AuditLog::create([
             'user_id'    => Auth::id(),
-            'action'     => "ADMIN_RESET_PASSWORD_STAFF ({$user->full_name} [{$user->role}] via Konfirmasi WA)",
-            'entity'     => 'USERS',
-            'entity_id'  => $user->id,
+            'action'     => "ADMIN_REJECT_PASSWORD_RESET (#PR-{$ticket->id} {$user->email})",
+            'entity'     => 'PASSWORD_RESET_REQUESTS',
+            'entity_id'  => $ticket->id,
             'created_at' => now(),
         ]);
 
-        return back()->with(
-            'success',
-            "Password akun {$user->full_name} (Role: " . strtoupper($user->role) . ") berhasil diperbarui menjadi \"{$newPassword}\". Silakan informasikan kembali via WhatsApp."
-        );
+        return back()->with('success', "Permintaan reset kata sandi #PR-{$ticket->id} untuk {$user->full_name} telah dibatalkan.");
     }
 
     public function destroyUser($id)
@@ -1222,6 +1324,10 @@ class RoomReserveController extends Controller
         $data['myApprovalCount'] = Approval::where('approver_id', $user->id)
             ->whereIn('decision', ['DISETUJUI', 'DITOLAK'])
             ->count();
+        $data['activeResetTicket'] = PasswordResetRequest::where('user_id', $user->id)
+            ->where('status', 'MENUNGGU')
+            ->latest('id')
+            ->first();
 
         return view('profile', $data);
     }
@@ -1269,37 +1375,81 @@ class RoomReserveController extends Controller
         return back()->with('success', 'Foto profil Anda berhasil diperbarui.');
     }
 
-    public function updateProfilePassword(Request $request)
+    public function requestOwnPasswordReset(Request $request)
     {
-        $request->validate([
-            'current_password' => 'required|string',
-            'new_password'     => 'required|string|min:4|confirmed',
-        ], [
-            'current_password.required' => 'Kata sandi saat ini wajib diisi.',
-            'new_password.required'     => 'Kata sandi baru wajib diisi.',
-            'new_password.min'          => 'Kata sandi baru minimal 4 karakter.',
-            'new_password.confirmed'    => 'Konfirmasi kata sandi baru tidak cocok.',
-        ]);
-
         $user = Auth::user();
 
-        if (!Hash::check($request->input('current_password'), $user->password_hash)) {
-            return back()->with('error', 'Kata sandi saat ini tidak sesuai. Silakan periksa kembali.');
+        if ($user->role === 'admin') {
+            return back()->with('error', 'Akun Administrator dikelola langsung di database.');
         }
 
-        $user->update([
-            'password_hash' => Hash::make($request->input('new_password')),
+        $request->validate([
+            'phone'           => 'required|string|max:30',
+            'requester_notes' => 'nullable|string|max:255',
+        ], [
+            'phone.required' => 'Konfirmasi Nomor HP Terdaftar wajib diisi.',
         ]);
 
-        AuditLog::create([
-            'user_id'    => $user->id,
-            'action'     => "UPDATE_OWN_PASSWORD ({$user->email})",
-            'entity'     => 'USERS',
-            'entity_id'  => $user->id,
-            'created_at' => now(),
-        ]);
+        $normalize = function (?string $p): string {
+            $d = preg_replace('/[^0-9]/', '', (string) $p);
+            return str_starts_with($d, '62') ? '0' . substr($d, 2) : $d;
+        };
 
-        return back()->with('success', 'Kata sandi akun Anda berhasil diperbarui.');
+        $inputPhone = $normalize($request->input('phone'));
+        $registeredPhone = $normalize($user->phone);
+
+        if ($registeredPhone === '' || $inputPhone !== $registeredPhone) {
+            return back()->with('error', 'Verifikasi gagal: Nomor HP yang dimasukkan tidak sesuai dengan Nomor HP Terdaftar di akun Anda.');
+        }
+
+        $targetHandler = $user->role === 'mahasiswa' ? 'BAAK' : 'ADMIN';
+
+        if ($user->role === 'mahasiswa' && trim((string) $request->input('requester_notes', '')) === '') {
+            return back()->with('error', 'Harap sertakan keterangan Komting Kelas berapa atau Nama Organisasi Anda untuk verifikasi BAAK.');
+        }
+
+        $ticket = PasswordResetRequest::where('user_id', $user->id)
+            ->where('target_handler', $targetHandler)
+            ->where('status', 'MENUNGGU')
+            ->latest('id')
+            ->first();
+
+        if (!$ticket) {
+            $ticket = PasswordResetRequest::create([
+                'user_id'         => $user->id,
+                'requested_email' => $user->email,
+                'requested_phone' => $user->phone,
+                'requester_notes' => $user->role === 'mahasiswa'
+                    ? trim((string) $request->input('requester_notes'))
+                    : 'Permohonan ubah kata sandi dari halaman Profil Saya (Konfirmasi WA)',
+                'target_handler'  => $targetHandler,
+                'status'          => 'MENUNGGU',
+                'requested_at'    => now(),
+            ]);
+
+            AuditLog::create([
+                'user_id'    => $user->id,
+                'action'     => "PROFILE_REQUEST_PASSWORD_RESET (#PR-{$ticket->id} -> {$targetHandler})",
+                'entity'     => 'PASSWORD_RESET_REQUESTS',
+                'entity_id'  => $ticket->id,
+                'created_at' => now(),
+            ]);
+        }
+
+        if ($targetHandler === 'BAAK') {
+            return back()->with('success', "Permohonan perubahan kata sandi (#PR-{$ticket->id}) telah dikirim ke BAAK. Silakan menemui petugas BAAK untuk konfirmasi.");
+        }
+
+        $waMessage = "Halo Administrator RoomReserve, saya mengajukan permohonan perubahan kata sandi dengan tiket *#PR-{$ticket->id}*.\n"
+            . "- Email: {$user->email}\n"
+            . "- Nomor HP Terdaftar: {$user->phone}\n"
+            . "Mohon bantuan pembaruan kata sandi akun saya. Terima kasih.";
+        $waUrl = 'https://wa.me/6281234567890?text=' . rawurlencode($waMessage);
+
+        return back()
+            ->with('success', "Permohonan perubahan kata sandi (#PR-{$ticket->id}) telah dikirim ke Administrator. Silakan lanjutkan konfirmasi via WhatsApp.")
+            ->with('wa_reset_url', $waUrl)
+            ->with('wa_ticket_code', "#PR-{$ticket->id}");
     }
 
     public function resetSeeder()

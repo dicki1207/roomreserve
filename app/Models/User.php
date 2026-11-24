@@ -81,4 +81,31 @@ class User extends Authenticatable
         return $this->belongsToMany(Room::class, 'reservations', 'requester_id', 'room_id')
             ->withPivot(['id', 'purpose', 'reservation_date', 'start_time', 'end_time', 'status', 'submitted_at']);
     }
+
+    public function passwordResetRequests()
+    {
+        return $this->hasMany(PasswordResetRequest::class, 'user_id');
+    }
+
+    public function pendingPasswordReset()
+    {
+        return $this->hasOne(PasswordResetRequest::class, 'user_id')
+            ->where('status', 'MENUNGGU')
+            ->latest('id');
+    }
+
+    /**
+     * Sensor sebagian Nomor HP (mis. 0812****3005) agar tidak mudah disalin sembarangan
+     */
+    public function maskedPhone(): string
+    {
+        $digits = preg_replace('/[^0-9]/', '', (string) $this->phone);
+        if ($digits === '') {
+            return 'Belum tercatat';
+        }
+        if (strlen($digits) <= 6) {
+            return str_repeat('*', strlen($digits));
+        }
+        return substr($digits, 0, 4) . str_repeat('*', strlen($digits) - 8) . substr($digits, -4);
+    }
 }

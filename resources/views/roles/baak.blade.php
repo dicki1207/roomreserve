@@ -13,71 +13,126 @@
 
 @if($tab === 'students')
     <div class="grid-main-side">
-        <div class="card">
-            <div class="card-header">
-                <div>
-                    <div class="card-title">Daftar Akun Mahasiswa (Komting Kelas) &amp; Organisasi ({{ $students->count() }})</div>
-                    <div style="font-size:12px; color:#64748b; margin-top:2px;">
-                        Layanan lupa password Mahasiswa &amp; Organisasi dilakukan melalui BAAK setelah verifikasi Komting Kelas / Organisasi.
+        <div style="display:flex; flex-direction:column; gap:18px;">
+            <!-- PERMINTAAN RESET KATA SANDI MAHASISWA / ORGANISASI MASUK -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Permintaan Reset Kata Sandi Mahasiswa / Organisasi ({{ $pendingStudentResets->count() }})</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                            Keamanan: BAAK <strong>hanya dapat mengubah password</strong> akun Mahasiswa / Organisasi yang telah mengajukan permintaan resmi dari halaman <strong>Lupa Kata Sandi</strong>.
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="table-wrap">
-                <table class="rr-table">
-                    <thead>
-                        <tr>
-                            <th>Nama &amp; Komting Kelas / Organisasi</th>
-                            <th>Email &amp; Nomor HP Terdaftar</th>
-                            <th>Status</th>
-                            <th>Aksi BAAK</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($students as $mhs)
-                            <tr>
-                                <td><strong>{{ $mhs->full_name }}</strong></td>
-                                <td>
-                                    <div>{{ $mhs->email }}</div>
-                                    <div style="font-size:11.5px; color:#64748b; margin-top:2px;">HP: <strong>{{ $mhs->phone ?: 'Belum diisi' }}</strong></div>
-                                </td>
-                                <td>
-                                    <span class="badge {{ $mhs->status === 'active' ? 'badge-emerald' : 'badge-rose' }}">
-                                        {{ $mhs->status === 'active' ? 'Aktif' : 'Nonaktif' }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                                        <button type="button"
-                                                onclick="openResetStudentPasswordModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ addslashes($mhs->phone ?? '') }}')"
-                                                class="btn btn-navy" style="padding:4px 9px; font-size:11.5px;">
-                                            Perbarui Password
-                                        </button>
-                                        <button type="button"
-                                                onclick="openEditStudentModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ addslashes($mhs->phone ?? '') }}', '{{ $mhs->status }}')"
-                                                class="btn btn-slate" style="padding:4px 8px; font-size:11.5px;">
-                                            Edit Akun
-                                        </button>
-                                        <form method="POST" action="{{ route('baak.students.destroy', $mhs->id) }}" onsubmit="return confirm('Hapus akun mahasiswa {{ $mhs->full_name }}?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-rose" style="padding:4px 8px; font-size:11.5px;">
-                                                Hapus
-                                            </button>
-                                        </form>
+                <div class="card-body">
+                    @forelse($pendingStudentResets as $req)
+                        <div class="item-box pending" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+                            <div style="flex:1; min-width:220px;">
+                                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:4px;">
+                                    <span class="badge badge-amber">#PR-{{ $req->id }}</span>
+                                    <strong>{{ $req->user->full_name }}</strong>
+                                </div>
+                                <div style="font-size:12px; color:#475569;">
+                                    Email: <strong>{{ $req->requested_email }}</strong> • HP Terverifikasi: <strong>{{ $req->requested_phone }}</strong>
+                                </div>
+                                @if(!empty($req->requester_notes))
+                                    <div style="font-size:12px; color:#1e40af; margin-top:2px;">
+                                        Keterangan: <strong>{{ $req->requester_notes }}</strong>
                                     </div>
-                                </td>
-                            </tr>
-                        @empty
+                                @endif
+                                <div style="font-size:11.5px; color:#64748b; margin-top:2px;">
+                                    Diajukan: {{ $req->requested_at }}
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button"
+                                        onclick="openResetStudentPasswordModal({{ $req->user->id }}, '{{ addslashes($req->user->full_name) }}', '{{ $req->user->email }}', '{{ addslashes($req->user->phone ?? '') }}')"
+                                        class="btn btn-navy" style="padding:5px 10px; font-size:12px;">
+                                    Proses &amp; Perbarui Password
+                                </button>
+                                <form method="POST" action="{{ route('baak.students.password.reject', $req->user->id) }}" onsubmit="return confirm('Tolak/batalkan permintaan reset #PR-{{ $req->id }}?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-rose" style="padding:5px 10px; font-size:12px;">
+                                        Tolak
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    @empty
+                        <p style="color:#64748b; font-size:12.5px;">Belum ada permintaan reset kata sandi dari Mahasiswa atau Organisasi.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Daftar Akun Mahasiswa (Komting Kelas) &amp; Organisasi ({{ $students->count() }})</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                            Tombol reset kata sandi hanya muncul apabila Mahasiswa / Organisasi mengajukan permintaan dari halaman Lupa Kata Sandi.
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="rr-table">
+                        <thead>
                             <tr>
-                                <td colspan="4" style="text-align:center; color:#64748b; padding:24px;">Belum ada akun mahasiswa terdaftar.</td>
+                                <th>Nama &amp; Komting Kelas / Organisasi</th>
+                                <th>Email &amp; Nomor HP Terdaftar</th>
+                                <th>Status</th>
+                                <th>Aksi BAAK</th>
                             </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @forelse($students as $mhs)
+                                <tr>
+                                    <td><strong>{{ $mhs->full_name }}</strong></td>
+                                    <td>
+                                        <div>{{ $mhs->email }}</div>
+                                        <div style="font-size:11.5px; color:#64748b; margin-top:2px;">HP: <strong>{{ $mhs->maskedPhone() }}</strong></div>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ $mhs->status === 'active' ? 'badge-emerald' : 'badge-rose' }}">
+                                            {{ $mhs->status === 'active' ? 'Aktif' : 'Nonaktif' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                                            @if($mhs->pendingPasswordReset)
+                                                <button type="button"
+                                                        onclick="openResetStudentPasswordModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ addslashes($mhs->phone ?? '') }}')"
+                                                        class="btn btn-navy" style="padding:4px 9px; font-size:11.5px;">
+                                                    Proses Reset (#PR-{{ $mhs->pendingPasswordReset->id }})
+                                                </button>
+                                            @endif
+                                            <button type="button"
+                                                    onclick="openEditStudentModal({{ $mhs->id }}, '{{ addslashes($mhs->full_name) }}', '{{ $mhs->email }}', '{{ addslashes($mhs->maskedPhone()) }}', '{{ $mhs->status }}')"
+                                                    class="btn btn-slate" style="padding:4px 8px; font-size:11.5px;">
+                                                Edit Akun
+                                            </button>
+                                            <form method="POST" action="{{ route('baak.students.destroy', $mhs->id) }}" onsubmit="return confirm('Hapus akun mahasiswa {{ $mhs->full_name }}?')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-rose" style="padding:4px 8px; font-size:11.5px;">
+                                                    Hapus
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="4" style="text-align:center; color:#64748b; padding:24px;">Belum ada akun mahasiswa terdaftar.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <div class="card">
+        <div class="card" style="height:fit-content;">
             <div class="card-header">
                 <div class="card-title">Buat Akun Mahasiswa / Organisasi Baru</div>
             </div>
@@ -139,7 +194,7 @@
     <div id="edit-student-modal" class="modal-backdrop">
         <div class="modal-card">
             <div class="card-header">
-                <div class="card-title">Edit / Reset Kata Sandi Mahasiswa</div>
+                <div class="card-title">Edit Data Akun Mahasiswa</div>
                 <button type="button" onclick="closeEditStudentModal()" style="color:#64748b; font-size:18px;">✕</button>
             </div>
             <form id="edit-student-form" method="POST" action="" class="card-body">
@@ -150,16 +205,15 @@
                     <input type="text" name="full_name" id="edit-student-name" required class="form-control">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" id="edit-student-email" required class="form-control">
+                    <label class="form-label">Email Akun <span style="font-size:11px; color:#64748b;">(Terkunci)</span></label>
+                    <input type="email" id="edit-student-email" readonly class="form-control" style="background:#f1f5f9; color:#475569; cursor:not-allowed;">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Nomor HP Terdaftar</label>
-                    <input type="text" name="phone" id="edit-student-phone" placeholder="0812xxxxxxxx" class="form-control">
+                    <label class="form-label">Nomor HP Terdaftar <span style="font-size:11px; color:#64748b;">(Terkunci)</span></label>
+                    <input type="text" id="edit-student-phone" readonly class="form-control" style="background:#f1f5f9; color:#475569; cursor:not-allowed;">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Kata Sandi Baru (Kosongkan jika tidak diubah)</label>
-                    <input type="password" name="password" placeholder="Minimal 4 karakter" class="form-control">
+                <div style="font-size:11.5px; color:#1e3a8a; background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px; padding:9px 11px; margin-bottom:12px; line-height:1.5;">
+                    <strong>Keamanan Permanen:</strong> <strong>Email</strong> dan <strong>Nomor HP Terdaftar</strong> dikunci setelah pembuatan akun agar tidak dapat dimanipulasi untuk membajak verifikasi Lupa Kata Sandi. Perubahan kata sandi hanya aktif bila Mahasiswa/Organisasi mengajukan permintaan resmi.
                 </div>
                 <div class="form-group">
                     <label class="form-label">Status Akun</label>

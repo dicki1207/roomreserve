@@ -190,6 +190,7 @@ class RoomReserveFlowTest extends TestCase
         $this->actingAs($baak)->post('/baak/students', [
             'full_name' => 'Andi Pratama (Mahasiswa TI)',
             'email'     => 'andi.mhs@roomreserve.ac.id',
+            'phone'     => '081277001122',
             'password'  => 'password123',
         ])->assertRedirect('/baak?tab=students');
 
@@ -199,20 +200,51 @@ class RoomReserveFlowTest extends TestCase
         $this->actingAs($baak)->put("/baak/students/{$student->id}", [
             'full_name' => 'Andi Pratama (Ketua Kelas TI)',
             'email'     => 'andi.mhs@roomreserve.ac.id',
+            'phone'     => '081277001122',
             'status'    => 'active',
         ])->assertRedirect('/baak?tab=students');
 
         $student->refresh();
         $this->assertEquals('Andi Pratama (Ketua Kelas TI)', $student->full_name);
 
-        // 8. BAAK memperbarui password Mahasiswa/Organisasi yang lupa password (setelah verifikasi Komting/Organisasi)
+        // 8a. KEAMANAN: BAAK TIDAK BOLEH mengubah password Mahasiswa tanpa permintaan resmi dari halaman Lupa Kata Sandi
+        $this->actingAs($baak)->put("/baak/students/{$student->id}/password", [
+            'password'           => 'sandibaru123',
+            'verification_notes' => 'Ubah tanpa permintaan',
+        ])->assertSessionHas('error');
+        $student->refresh();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('password123', $student->password_hash));
+
+        // 8b. KEAMANAN: Permintaan Lupa Kata Sandi dengan Nomor HP salah DITOLAK
+        $this->post('/forgot-password/request', [
+            'channel'         => 'baak',
+            'email'           => 'andi.mhs@roomreserve.ac.id',
+            'phone'           => '089999999999',
+            'requester_notes' => 'Komting Kelas TI-5A',
+        ])->assertSessionHas('forgot_error');
+
+        // 8c. Mahasiswa mengajukan permintaan reset dengan Email & Nomor HP terdaftar yang cocok -> Tiket MENUNGGU dibuat
+        $this->post('/forgot-password/request', [
+            'channel'         => 'baak',
+            'email'           => 'andi.mhs@roomreserve.ac.id',
+            'phone'           => '081277001122',
+            'requester_notes' => 'Komting Kelas TI-5A',
+        ])->assertSessionHas('success');
+
+        // 8d. Sekarang BAAK BOLEH memperbarui password sesuai tiket aktif -> Tiket menjadi SELESAI
         $this->actingAs($baak)->put("/baak/students/{$student->id}/password", [
             'password'           => 'sandibaru123',
             'verification_notes' => 'Hadir di BAAK - Komting Kelas TI-5A',
-        ])->assertRedirect('/baak?tab=students');
+        ])->assertRedirect('/baak?tab=students')->assertSessionHas('success');
 
         $student->refresh();
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('sandibaru123', $student->password_hash));
+
+        // 8e. Setelah tiket SELESAI, percobaan ubah password lagi tanpa permintaan baru kembali DITOLAK
+        $this->actingAs($baak)->put("/baak/students/{$student->id}/password", [
+            'password'           => 'ubahsembarangan',
+            'verification_notes' => 'Tanpa tiket',
+        ])->assertSessionHas('error');
 
         $this->actingAs($baak)->delete("/baak/students/{$student->id}")
             ->assertRedirect('/baak?tab=students');
@@ -228,6 +260,7 @@ class RoomReserveFlowTest extends TestCase
         $this->actingAs($admin)->post('/admin/users', [
             'full_name' => 'Teknisi Lab TI',
             'email'     => 'teknisi@roomreserve.ac.id',
+            'phone'     => '081288009900',
             'password'  => 'password123',
             'role'      => 'kalab',
         ])->assertSessionHas('success');
@@ -256,24 +289,46 @@ class RoomReserveFlowTest extends TestCase
         $this->actingAs($admin)->get('/admin?tab=rooms')->assertStatus(200);
         $this->actingAs($admin)->post('/baak/rooms/toggle', ['room_id' => 1])->assertRedirect('/admin');
 
-        // 5. UPDATE user (Dosen/Kalab/BAAK)
+        // 5. UPDATE user (Dosen/Kalab/BAAK) — Email & Nomor HP DIKUNCI (Opsi B Immutable)
         $this->actingAs($admin)->put("/admin/users/{$newUser->id}", [
             'full_name' => 'Teknisi Senior Lab TI',
-            'email'     => 'teknisi@roomreserve.ac.id',
+            'email'     => 'bajakan@attacker.com',
+            'phone'     => '089999999999',
             'role'      => 'kalab',
             'status'    => 'active',
         ])->assertSessionHas('success');
 
         $newUser->refresh();
         $this->assertEquals('Teknisi Senior Lab TI', $newUser->full_name);
+        $this->assertEquals('teknisi@roomreserve.ac.id', $newUser->email);
+        $this->assertEquals('081288009900', $newUser->phone);
 
-        // 6. Admin memperbarui password Dosen/Kalab/BAAK yang lupa password (konfirmasi via WA)
+        // 6a. KEAMANAN: Admin TIDAK BOLEH mengubah password Dosen/Kalab/BAAK tanpa permintaan dari halaman Lupa Kata Sandi
+        $this->actingAs($admin)->put("/admin/users/{$newUser->id}/password", [
+            'password' => 'kalabbaru123',
+        ])->assertSessionHas('error');
+        $newUser->refresh();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('password123', $newUser->password_hash));
+
+        // 6b. User mengajukan permintaan reset dengan Email + Nomor HP Terdaftar yang cocok
+        $this->post('/forgot-password/request', [
+            'channel' => 'admin',
+            'email'   => 'teknisi@roomreserve.ac.id',
+            'phone'   => '081288009900',
+        ])->assertSessionHas('success')->assertSessionHas('wa_reset_url');
+
+        // 6c. Sekarang Admin BOLEH memperbarui password sesuai tiket aktif -> Tiket menjadi SELESAI
         $this->actingAs($admin)->put("/admin/users/{$newUser->id}/password", [
             'password' => 'kalabbaru123',
         ])->assertSessionHas('success');
 
         $newUser->refresh();
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('kalabbaru123', $newUser->password_hash));
+
+        // 6d. Setelah tiket SELESAI, Admin kembali TIDAK BISA mengubah password tanpa permintaan baru
+        $this->actingAs($admin)->put("/admin/users/{$newUser->id}/password", [
+            'password' => 'ubahdiamdiam',
+        ])->assertSessionHas('error');
 
         // 7. DELETE user (Dosen/Kalab/BAAK)
         $this->actingAs($admin)->delete("/admin/users/{$newUser->id}")
@@ -474,21 +529,20 @@ class RoomReserveFlowTest extends TestCase
         $kalab = User::where('email', 'kasmawi@roomreserve.ac.id')->firstOrFail();
         $this->actingAs($kalab)->get('/kalab?tab=rooms')->assertStatus(200);
 
-        // Ubah password sendiri gagal jika kata sandi saat ini salah
-        $this->actingAs($kalab)->put('/profile/password', [
-            'current_password'          => 'salah123',
-            'new_password'              => 'baru1234',
-            'new_password_confirmation' => 'baru1234',
+        // Permohonan ubah password dari /profile GAGAL jika Nomor HP salah
+        $this->actingAs($kalab)->post('/profile/password-request', [
+            'phone' => '089999999999',
         ])->assertSessionHas('error');
 
-        // Ubah password sendiri berhasil jika kata sandi saat ini cocok
-        $this->actingAs($kalab)->put('/profile/password', [
-            'current_password'          => 'password123',
-            'new_password'              => 'baru1234',
-            'new_password_confirmation' => 'baru1234',
-        ])->assertSessionHas('success');
+        // Permohonan ubah password dari /profile BERHASIL membuat tiket ke Admin jika Nomor HP cocok
+        $this->actingAs($kalab)->post('/profile/password-request', [
+            'phone' => $kalab->phone,
+        ])->assertSessionHas('success')->assertSessionHas('wa_reset_url');
 
-        $kalab->refresh();
-        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('baru1234', $kalab->password_hash));
+        $this->assertDatabaseHas('password_reset_requests', [
+            'user_id'        => $kalab->id,
+            'target_handler' => 'ADMIN',
+            'status'         => 'MENUNGGU',
+        ]);
     }
 }

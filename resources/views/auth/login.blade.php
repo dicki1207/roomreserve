@@ -38,6 +38,13 @@
             @if(session('success'))
                 <div class="reason-box approved" style="margin-top:0; margin-bottom:18px; font-weight:500;">
                     {{ session('success') }}
+                    @if(session('wa_reset_url'))
+                        <div style="margin-top:10px;">
+                            <a href="{{ session('wa_reset_url') }}" target="_blank" rel="noopener noreferrer" class="btn btn-emerald" style="width:100%; padding:9px 12px; font-size:12.5px;">
+                                Buka WhatsApp Administrator ({{ session('wa_ticket_code') }})
+                            </a>
+                        </div>
+                    @endif
                 </div>
             @endif
 
@@ -116,58 +123,84 @@
     </div>
 </div>
 
-<!-- MODAL ALUR LUPA KATA SANDI (VERIFIKASI EMAIL & NOMOR HP TERDAFTAR) -->
-<div id="forgot-modal" class="modal-backdrop">
-    <div class="modal-card" style="max-width:560px;">
+<!-- MODAL ALUR LUPA KATA SANDI (VERIFIKASI EMAIL & NOMOR HP TERDAFTAR -> TIKET RESMI) -->
+<div id="forgot-modal" class="modal-backdrop {{ session('open_forgot_modal') ? 'show' : '' }}">
+    <div class="modal-card" style="max-width:580px;">
         <div class="card-header">
-            <div class="card-title">Layanan Lupa Kata Sandi (Perbaikan Akun)</div>
+            <div class="card-title">Layanan Lupa Kata Sandi (Permohonan Resmi)</div>
             <button type="button" onclick="closeForgotModal()" style="color:#64748b; font-size:18px;">✕</button>
         </div>
 
         <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+            @if(session('forgot_error'))
+                <div class="reason-box rejected" style="margin-top:0; font-weight:500;">
+                    {{ session('forgot_error') }}
+                </div>
+            @endif
+
+            <div style="font-size:12px; color:#475569; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; line-height:1.5;">
+                <strong>Keamanan Akun:</strong> Petugas BAAK maupun Administrator <strong>tidak dapat mengubah kata sandi</strong> akun mana pun tanpa adanya permintaan resmi terverifikasi (cocok <strong>Email + Nomor HP Terdaftar</strong>) dari formulir ini.
+            </div>
+
             <!-- JALUR 1: MAHASISWA (KOMTING KELAS) & ORGANISASI -> MELALUI BAAK -->
-            <div style="padding:14px 16px; border-radius:10px; border:1px solid #bfdbfe; background:#eff6ff;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <form method="POST" action="{{ route('password.request.submit') }}" style="padding:14px 16px; border-radius:10px; border:1px solid #bfdbfe; background:#eff6ff;">
+                @csrf
+                <input type="hidden" name="channel" value="baak">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; flex-wrap:wrap;">
                     <strong style="color:#1e40af; font-size:13.5px;">1. Mahasiswa (Komting Kelas) &amp; Organisasi</strong>
                     <span class="badge badge-navy">Melalui BAAK</span>
                 </div>
-                <p style="font-size:12.5px; color:#1e293b; line-height:1.55; margin-bottom:8px;">
-                    Bagi <strong>Mahasiswa (Komting Kelas)</strong> atau pengurus <strong>Organisasi Mahasiswa</strong> yang lupa kata sandi, silakan datang menemui petugas <strong>BAAK</strong> dengan menyertakan:
-                </p>
-                <ul style="font-size:12px; color:#334155; padding-left:18px; line-height:1.6;">
-                    <li><strong>Email Akun</strong> &amp; <strong>Nomor HP Terdaftar di BAAK</strong> (wajib sesuai dengan nomor HP yang tercatat di BAAK)</li>
-                    <li><strong>Nama Lengkap</strong> &amp; <strong>Komting Kelas berapa</strong> (contoh: Komting TI-5A) atau <strong>Nama Organisasi</strong></li>
-                </ul>
-                <div style="margin-top:8px; font-size:11.5px; color:#1d4ed8; font-weight:600;">
-                    → Petugas BAAK akan mencocokkan Email serta Nomor HP terdaftar sebelum memperbarui kata sandi akun Anda.
-                </div>
-            </div>
-
-            <!-- JALUR 2: DOSEN PENGAMPU, KALAB, & BAAK -> HUBUNGI ADMIN VIA WHATSAPP -->
-            <div style="padding:14px 16px; border-radius:10px; border:1px solid #e2e8f0; background:#f8fafc;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <strong style="color:#0f172a; font-size:13.5px;">2. Dosen Pengampu, Kalab, &amp; BAAK</strong>
-                    <span class="badge badge-emerald">Via WhatsApp Admin</span>
-                </div>
-                <p style="font-size:12.5px; color:#334155; line-height:1.55; margin-bottom:10px;">
-                    Masukkan <strong>Email Akun</strong> dan <strong>Nomor HP Terdaftar</strong> untuk menghubungi <strong>Administrator Sistem via WhatsApp</strong>. Admin akan memverifikasi kecocokan email dan nomor HP Anda sebelum memperbarui kata sandi.
+                <p style="font-size:12px; color:#1e293b; line-height:1.5; margin-bottom:10px;">
+                    Ajukan permohonan reset di bawah ini (wajib cocok <strong>Email</strong> &amp; <strong>Nomor HP terdaftar di BAAK</strong>), lalu temui petugas BAAK untuk menerima kata sandi baru.
                 </p>
 
                 <div class="form-row-2" style="margin-bottom:8px;">
                     <div>
                         <label class="form-label" style="font-size:11.5px;">Email Akun</label>
-                        <input type="email" id="wa-email" placeholder="nama@roomreserve.ac.id" class="form-control" style="padding:8px 10px; font-size:13px;">
+                        <input type="email" name="email" required value="{{ old('channel') === 'baak' ? old('email') : '' }}" placeholder="mahasiswa@roomreserve.ac.id" class="form-control" style="padding:7px 10px; font-size:12.5px; background:#ffffff;">
+                    </div>
+                    <div>
+                        <label class="form-label" style="font-size:11.5px;">Nomor HP Terdaftar di BAAK</label>
+                        <input type="text" name="phone" required value="{{ old('channel') === 'baak' ? old('phone') : '' }}" placeholder="0812xxxxxxxx" class="form-control" style="padding:7px 10px; font-size:12.5px; background:#ffffff;">
+                    </div>
+                </div>
+                <div style="margin-bottom:10px;">
+                    <label class="form-label" style="font-size:11.5px;">Komting Kelas / Nama Organisasi &amp; Penanggung Jawab</label>
+                    <input type="text" name="requester_notes" required value="{{ old('channel') === 'baak' ? old('requester_notes') : '' }}" placeholder="Contoh: Komting TI-5A atau Ketua HMTI / BEM" class="form-control" style="padding:7px 10px; font-size:12.5px; background:#ffffff;">
+                </div>
+
+                <button type="submit" class="btn btn-navy" style="width:100%; padding:9px 12px;">
+                    Kirim Permintaan Reset ke BAAK
+                </button>
+            </form>
+
+            <!-- JALUR 2: DOSEN PENGAMPU, KALAB, & BAAK -> HUBUNGI ADMIN VIA WHATSAPP -->
+            <form method="POST" action="{{ route('password.request.submit') }}" style="padding:14px 16px; border-radius:10px; border:1px solid #e2e8f0; background:#f8fafc;">
+                @csrf
+                <input type="hidden" name="channel" value="admin">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; flex-wrap:wrap;">
+                    <strong style="color:#0f172a; font-size:13.5px;">2. Dosen Pengampu, Kalab, &amp; BAAK</strong>
+                    <span class="badge badge-emerald">Via WhatsApp Admin</span>
+                </div>
+                <p style="font-size:12px; color:#334155; line-height:1.5; margin-bottom:10px;">
+                    Masukkan <strong>Email Akun</strong> dan <strong>Nomor HP Terdaftar</strong>. Setelah sistem memverifikasi kecocokan data, tiket reset akan aktif di dashboard Administrator dan Anda dapat melanjutkan konfirmasi via WhatsApp.
+                </p>
+
+                <div class="form-row-2" style="margin-bottom:10px;">
+                    <div>
+                        <label class="form-label" style="font-size:11.5px;">Email Akun</label>
+                        <input type="email" name="email" required value="{{ old('channel') === 'admin' ? old('email') : '' }}" placeholder="nama@roomreserve.ac.id" class="form-control" style="padding:7px 10px; font-size:12.5px; background:#ffffff;">
                     </div>
                     <div>
                         <label class="form-label" style="font-size:11.5px;">Nomor HP Terdaftar</label>
-                        <input type="text" id="wa-phone" placeholder="0812xxxxxxxx" class="form-control" style="padding:8px 10px; font-size:13px;">
+                        <input type="text" name="phone" required value="{{ old('channel') === 'admin' ? old('phone') : '' }}" placeholder="0812xxxxxxxx" class="form-control" style="padding:7px 10px; font-size:12.5px; background:#ffffff;">
                     </div>
                 </div>
 
-                <button type="button" onclick="openAdminWhatsApp()" class="btn btn-emerald" style="width:100%; padding:9px 12px;">
-                    Buka WhatsApp Administrator
+                <button type="submit" class="btn btn-emerald" style="width:100%; padding:9px 12px;">
+                    Ajukan Permintaan &amp; Hubungi WhatsApp Admin
                 </button>
-            </div>
+            </form>
 
             <div style="display:flex; justify-content:flex-end;">
                 <button type="button" onclick="closeForgotModal()" class="btn btn-slate">Tutup</button>
@@ -211,14 +244,6 @@ function openForgotModal() {
 
 function closeForgotModal() {
     document.getElementById('forgot-modal').classList.remove('show');
-}
-
-function openAdminWhatsApp() {
-    const email = document.getElementById('wa-email').value.trim() || '(Email Akun)';
-    const phone = document.getElementById('wa-phone').value.trim() || '(Nomor HP Terdaftar)';
-    const message = 'Halo Administrator RoomReserve, saya mengajukan permohonan reset kata sandi untuk akun dengan Email: *' + email + '* dan Nomor HP Terdaftar: *' + phone + '*. Mohon bantuan verifikasi dan perbaikan kata sandi akun saya. Terima kasih.';
-    const waUrl = 'https://wa.me/6281234567890?text=' + encodeURIComponent(message);
-    window.open(waUrl, '_blank');
 }
 </script>
 @endsection

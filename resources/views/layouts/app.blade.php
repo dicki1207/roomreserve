@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}?v=2">
     <link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=2">
     <link rel="apple-touch-icon" href="{{ asset('images/logo-icon.png') }}?v=2">
-    <link rel="stylesheet" href="{{ asset('css/roomreserve-tailwind.css') }}?v=7">
+    <link rel="stylesheet" href="{{ asset('css/roomreserve-tailwind.css') }}?v=13">
 </head>
 <body>
 
@@ -26,14 +26,14 @@
             ];
         @endphp
         <div class="app-shell">
-            <!-- SIDEBAR -->
+            <!-- SIDEBAR KONSEP A: CLEAN ACADEMIC LIGHT (PUTIH BERSIH MENYATU DENGAN LOGO ASLI) -->
             <aside id="app-sidebar" class="sidebar">
                 <div>
                     <div class="sidebar-brand">
                         <a href="{{ route($roleRoute) }}" class="brand-box">
                             <img src="{{ asset('images/logo-icon.png') }}?v=2" alt="RoomReserve" style="width:38px; height:38px; object-fit:contain; flex-shrink:0;">
                             <div style="min-width:0;">
-                                <img src="{{ asset('images/logo-wordmark-dark.png') }}?v=2" alt="RoomReserve" style="height:20px; width:auto; display:block; margin-bottom:3px;">
+                                <img src="{{ asset('images/logo-wordmark.png') }}?v=2" alt="RoomReserve" style="height:20px; width:auto; display:block; margin-bottom:2px;">
                                 <div class="brand-sub">GKT &amp; Laboratorium TI</div>
                             </div>
                         </a>
@@ -43,75 +43,117 @@
                     <div class="nav-list">
                         <a href="{{ route($roleRoute, ['tab' => 'dashboard']) }}"
                            class="nav-link {{ ($tab ?? 'dashboard') === 'dashboard' ? 'active' : '' }}">
-                            <span>Dashboard</span>
+                            <span class="nav-link-inner">
+                                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                                <span>Dashboard</span>
+                            </span>
                         </a>
 
                         @if($user->role === 'mahasiswa')
                             <a href="{{ route('role.mahasiswa', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Daftar Ruangan</span>
-                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 17 }}</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 12v.01"></path><path d="M9 15v.01"></path><path d="M9 18v.01"></path></svg>
+                                    <span>Daftar Ruangan</span>
+                                </span>
+                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 18 }}</span>
                             </a>
                             <a href="{{ route('role.mahasiswa', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
-                                <span>Kalender Ruangan</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    <span>Kalender Ruangan</span>
+                                </span>
                             </a>
 
                         @elseif($user->role === 'dosen')
                             <a href="{{ route('role.dosen', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Daftar Ruangan</span>
-                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 17 }}</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 12v.01"></path><path d="M9 15v.01"></path><path d="M9 18v.01"></path></svg>
+                                    <span>Daftar Ruangan</span>
+                                </span>
+                                <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 18 }}</span>
                             </a>
                             <a href="{{ route('role.dosen', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
-                                <span>Kalender Ruangan</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    <span>Kalender Ruangan</span>
+                                </span>
                             </a>
 
                         @elseif($user->role === 'kalab')
                             <a href="{{ route('role.kalab', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Daftar Ruangan</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path></svg>
+                                    <span>Daftar Ruangan</span>
+                                </span>
                                 <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 18 }}</span>
                             </a>
                             <a href="{{ route('role.kalab', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
-                                <span>Kalender Ruangan</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    <span>Kalender Ruangan</span>
+                                </span>
                             </a>
 
                         @elseif($user->role === 'baak')
                             <a href="{{ route('role.baak', ['tab' => 'students']) }}"
                                class="nav-link {{ ($tab ?? '') === 'students' ? 'active' : '' }}">
-                                <span>Data Mahasiswa</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                    <span>Data Mahasiswa</span>
+                                </span>
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'schedules']) }}"
                                class="nav-link {{ ($tab ?? '') === 'schedules' ? 'active' : '' }}">
-                                <span>Jadwal Kuliah &amp; Lab</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                                    <span>Jadwal Kuliah &amp; Lab</span>
+                                </span>
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Data Ruangan &amp; Lab</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path></svg>
+                                    <span>Data Ruangan &amp; Lab</span>
+                                </span>
                             </a>
                             <a href="{{ route('role.baak', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
-                                <span>Kalender Ruangan</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    <span>Kalender Ruangan</span>
+                                </span>
                             </a>
 
                         @elseif($user->role === 'admin')
                             <a href="{{ route('role.admin', ['tab' => 'rooms']) }}"
                                class="nav-link {{ ($tab ?? '') === 'rooms' ? 'active' : '' }}">
-                                <span>Cek Kelas &amp; Lab (View)</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path></svg>
+                                    <span>Cek Kelas &amp; Lab (View)</span>
+                                </span>
                                 <span class="nav-pill">{{ isset($allRooms) ? $allRooms->count() : 18 }}</span>
                             </a>
                             <a href="{{ route('role.admin', ['tab' => 'calendar']) }}"
                                class="nav-link {{ ($tab ?? '') === 'calendar' ? 'active' : '' }}">
-                                <span>Kalender Ruangan</span>
+                                <span class="nav-link-inner">
+                                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    <span>Kalender Ruangan</span>
+                                </span>
                             </a>
                         @endif
 
                         <a href="{{ route('profile.show') }}"
                            class="nav-link {{ ($tab ?? '') === 'profile' ? 'active' : '' }}">
-                            <span>Profil Saya</span>
+                            <span class="nav-link-inner">
+                                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                <span>Profil Saya</span>
+                            </span>
                         </a>
                     </div>
                 </div>
@@ -120,7 +162,7 @@
                     <a href="{{ route('profile.show') }}" class="user-mini" title="Buka Profil Saya">
                         @if(!empty($user->avatar))
                             <img src="{{ $user->avatar }}" alt="{{ $user->full_name }}"
-                                 style="width:34px; height:34px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid rgba(96, 165, 250, 0.4);">
+                                 style="width:34px; height:34px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid rgba(147, 197, 253, 0.45);">
                         @else
                             <div class="user-avatar">{{ strtoupper(substr($user->full_name, 0, 2)) }}</div>
                         @endif
@@ -129,8 +171,9 @@
                             <div class="user-role">{{ $roleLabels[$user->role] ?? ucfirst($user->role) }}</div>
                         </div>
                     </a>
-                    <a href="{{ route('logout') }}" class="btn btn-slate" style="width:100%; background:#1e293b; color:#cbd5e1; border-color:#334155;">
-                        Keluar
+                    <a href="{{ route('logout') }}" class="btn sidebar-logout-btn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        <span>Keluar</span>
                     </a>
                 </div>
             </aside>
@@ -140,9 +183,10 @@
                 <header class="topbar">
                     <div class="topbar-left">
                         <button type="button" onclick="toggleSidebar()" class="menu-toggle-btn">☰ Menu</button>
-                        @hasSection('role_title')
-                            <div class="page-title">@yield('role_title')</div>
-                        @endif
+                        <div class="topbar-clock" title="Waktu Indonesia Barat (WIB)">
+                            <span class="topbar-clock-dot"></span>
+                            <span>{{ now()->translatedFormat('d M Y') }} • {{ now()->format('H:i') }} WIB</span>
+                        </div>
                     </div>
                     <div class="topbar-right">
                         @if(in_array($user->role, ['mahasiswa', 'dosen']))

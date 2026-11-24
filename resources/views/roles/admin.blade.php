@@ -139,11 +139,57 @@
 @else
     <div class="grid-main-side">
         <div style="display:flex; flex-direction:column; gap:18px;">
+            <!-- PERMINTAAN RESET KATA SANDI MASUK (KHUSUS USER YANG MENGAJUKAN DARI LUPA PASSWORD) -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Permintaan Reset Kata Sandi Masuk ({{ $pendingStaffResets->count() }})</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                            Keamanan: Administrator <strong>hanya dapat mengubah password</strong> akun yang mengajukan permintaan resmi dari halaman <strong>Lupa Kata Sandi</strong>.
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @forelse($pendingStaffResets as $req)
+                        <div class="item-box pending" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+                            <div style="flex:1; min-width:220px;">
+                                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:4px;">
+                                    <span class="badge badge-amber">#PR-{{ $req->id }}</span>
+                                    <strong>{{ $req->user->full_name }}</strong>
+                                </div>
+                                <div style="font-size:12px; color:#475569;">
+                                    Email: <strong>{{ $req->requested_email }}</strong> • HP Terverifikasi: <strong>{{ $req->requested_phone }}</strong>
+                                </div>
+                                <div style="font-size:11.5px; color:#64748b; margin-top:2px;">
+                                    Diajukan: {{ $req->requested_at }}
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button"
+                                        onclick="openResetStaffPasswordModal({{ $req->user->id }}, '{{ addslashes($req->user->full_name) }}', '{{ $req->user->email }}', '{{ addslashes($req->user->phone ?? '') }}')"
+                                        class="btn btn-navy" style="padding:5px 10px; font-size:12px;">
+                                    Proses &amp; Perbarui Password (WA)
+                                </button>
+                                <form method="POST" action="{{ route('admin.users.password.reject', $req->user->id) }}" onsubmit="return confirm('Tolak/batalkan permintaan reset #PR-{{ $req->id }}?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-rose" style="padding:5px 10px; font-size:12px;">
+                                        Tolak
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    @empty
+                        <p style="color:#64748b; font-size:12.5px;">Belum ada permintaan reset kata sandi dari Dosen, Kalab, atau BAAK.</p>
+                    @endforelse
+                </div>
+            </div>
+
             <!-- TABEL AKUN DOSEN, KALAB, DAN BAAK -->
             <div class="card">
                 <div class="card-header">
                     <div>
-                        <div class="card-title">Daftar Akun Dosen, Kepala Laboratorium, & BAAK ({{ $staffUsers->count() }})</div>
+                        <div class="card-title">Daftar Akun Dosen, Kepala Laboratorium, &amp; BAAK ({{ $staffUsers->count() }})</div>
                         <div style="font-size:12px; color:#64748b; margin-top:2px;">
                             Akun Mahasiswa dikelola oleh <strong>BAAK</strong>. Akun Administrator dibuat langsung di <strong>Database</strong>.
                         </div>
@@ -165,7 +211,7 @@
                                     <td><strong>{{ $u->full_name }}</strong></td>
                                     <td>
                                         <div>{{ $u->email }}</div>
-                                        <div style="font-size:11.5px; color:#64748b; margin-top:2px;">HP: <strong>{{ $u->phone ?: 'Belum diisi' }}</strong></div>
+                                        <div style="font-size:11.5px; color:#64748b; margin-top:2px;">HP: <strong>{{ $u->maskedPhone() }}</strong></div>
                                     </td>
                                     <td>
                                         <span class="badge {{ $u->status === 'active' ? 'badge-emerald' : 'badge-rose' }}">
@@ -173,14 +219,16 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                                            @if($u->pendingPasswordReset)
+                                                <button type="button"
+                                                        onclick="openResetStaffPasswordModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ addslashes($u->phone ?? '') }}')"
+                                                        class="btn btn-navy" style="padding:3px 8px; font-size:11px;">
+                                                    Proses Reset (#PR-{{ $u->pendingPasswordReset->id }})
+                                                </button>
+                                            @endif
                                             <button type="button"
-                                                    onclick="openResetStaffPasswordModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ addslashes($u->phone ?? '') }}')"
-                                                    class="btn btn-navy" style="padding:3px 8px; font-size:11px;">
-                                                Perbarui Password (WA)
-                                            </button>
-                                            <button type="button"
-                                                    onclick="openEditUserModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ addslashes($u->phone ?? '') }}', '{{ $u->role }}', '{{ $u->status }}')"
+                                                    onclick="openEditUserModal({{ $u->id }}, '{{ addslashes($u->full_name) }}', '{{ $u->email }}', '{{ addslashes($u->maskedPhone()) }}', '{{ $u->role }}', '{{ $u->status }}')"
                                                     class="btn btn-slate" style="padding:3px 8px; font-size:11px;">
                                                 Edit Akun
                                             </button>
@@ -333,16 +381,15 @@
                     <input type="text" name="full_name" id="edit-user-name" required class="form-control">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" id="edit-user-email" required class="form-control">
+                    <label class="form-label">Email Akun <span style="font-size:11px; color:#64748b;">(Terkunci)</span></label>
+                    <input type="email" id="edit-user-email" readonly class="form-control" style="background:#f1f5f9; color:#475569; cursor:not-allowed;">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Nomor HP Terdaftar</label>
-                    <input type="text" name="phone" id="edit-user-phone" placeholder="0812xxxxxxxx" class="form-control">
+                    <label class="form-label">Nomor HP Terdaftar <span style="font-size:11px; color:#64748b;">(Terkunci)</span></label>
+                    <input type="text" id="edit-user-phone" readonly class="form-control" style="background:#f1f5f9; color:#475569; cursor:not-allowed;">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Reset Kata Sandi (Kosongkan jika tidak diubah)</label>
-                    <input type="password" name="password" placeholder="Minimal 4 karakter" class="form-control">
+                <div style="font-size:11.5px; color:#1e3a8a; background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px; padding:9px 11px; margin-bottom:12px; line-height:1.5;">
+                    <strong>Keamanan Permanen:</strong> <strong>Email</strong> dan <strong>Nomor HP Terdaftar</strong> dikunci setelah pembuatan akun agar tidak dapat dimanipulasi untuk membajak verifikasi Lupa Kata Sandi. Perubahan kata sandi hanya aktif bila pemilik akun mengajukan permintaan resmi.
                 </div>
                 <div class="form-group">
                     <label class="form-label">Role</label>

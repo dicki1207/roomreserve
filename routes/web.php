@@ -14,9 +14,10 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-// Route Autentikasi
+// Route Autentikasi & Permintaan Reset Kata Sandi (Lupa Password Terverifikasi)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+Route::post('/forgot-password/request', [AuthController::class, 'requestPasswordReset'])->name('password.request.submit');
 Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // =========================================================================
@@ -68,6 +69,7 @@ Route::middleware(['auth', 'role:baak'])->prefix('baak')->group(function () {
     Route::post('/students', [RoomReserveController::class, 'storeMahasiswa'])->name('baak.students.store');
     Route::put('/students/{id}', [RoomReserveController::class, 'updateMahasiswa'])->name('baak.students.update');
     Route::put('/students/{id}/password', [RoomReserveController::class, 'resetMahasiswaPassword'])->name('baak.students.password');
+    Route::delete('/students/{id}/password-request', [RoomReserveController::class, 'rejectMahasiswaPasswordReset'])->name('baak.students.password.reject');
     Route::delete('/students/{id}', [RoomReserveController::class, 'destroyMahasiswa'])->name('baak.students.destroy');
 });
 
@@ -79,6 +81,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::post('/users', [RoomReserveController::class, 'storeUser'])->name('admin.users.store');
     Route::put('/users/{id}', [RoomReserveController::class, 'updateUser'])->name('admin.users.update');
     Route::put('/users/{id}/password', [RoomReserveController::class, 'resetStaffPassword'])->name('admin.users.password');
+    Route::delete('/users/{id}/password-request', [RoomReserveController::class, 'rejectStaffPasswordReset'])->name('admin.users.password.reject');
     Route::delete('/users/{id}', [RoomReserveController::class, 'destroyUser'])->name('admin.users.destroy');
 
     Route::post('/seeder/reset', [RoomReserveController::class, 'resetSeeder'])->name('admin.seeder.reset');
@@ -93,5 +96,5 @@ Route::middleware(['auth', 'role:dosen,kalab,baak'])
 Route::middleware(['auth'])->prefix('profile')->group(function () {
     Route::get('/', [RoomReserveController::class, 'showProfile'])->name('profile.show');
     Route::post('/avatar', [RoomReserveController::class, 'updateProfileAvatar'])->name('profile.avatar');
-    Route::put('/password', [RoomReserveController::class, 'updateProfilePassword'])->name('profile.password');
+    Route::post('/password-request', [RoomReserveController::class, 'requestOwnPasswordReset'])->name('profile.password.request');
 });
