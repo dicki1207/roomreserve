@@ -126,19 +126,25 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 5. MASTER BUILDINGS (Gedung GKT 4 Lantai & Gedung TI 2 Lantai)
-        $gkt = Building::create(['name' => 'GKT', 'total_floors' => 4]);
+        $gkt = Building::create(['name' => 'GKT', 'total_floors' => 3]);
         $ti  = Building::create(['name' => 'TI',  'total_floors' => 2]);
 
         // 6. MASTER ROOMS — GEDUNG GKT (Lantai 1 - 4)
         $gktRoomsData = [
             [1, 'GKT-101', 'Ruang Kelas GKT 101', 'Ruang Kelas', 40],
             [1, 'GKT-102', 'Ruang Kelas GKT 102', 'Ruang Kelas', 40],
+            [1, 'GKT-103', 'Ruang Kelas GKT 103', 'Ruang Kelas', 40],
+            [1, 'GKT-104', 'Ruang Kelas GKT 104', 'Ruang Kelas', 40],
+            [1, 'GKT-105', 'Ruang Kelas GKT 105', 'Ruang Kelas', 40],
             [2, 'GKT-201', 'Ruang Kelas GKT 201', 'Ruang Kelas', 45],
             [2, 'GKT-202', 'Ruang Kelas GKT 202', 'Ruang Kelas', 45],
+            [2, 'GKT-203', 'Ruang Kelas GKT 203', 'Ruang Kelas', 40],
+            [2, 'GKT-204', 'Ruang Kelas GKT 204', 'Ruang Kelas', 40],
+            [2, 'GKT-205', 'Ruang Kelas GKT 205', 'Ruang Kelas', 40],
             [3, 'GKT-301', 'Ruang Kuliah Gabungan GKT 301', 'Kelas Besar', 80],
             [3, 'GKT-302', 'Ruang Kelas GKT 302', 'Ruang Kelas', 40],
-            [4, 'GKT-401', 'Aula Seminar GKT Lantai 4', 'Aula Seminar', 150],
-            [4, 'GKT-402', 'Ruang Kelas GKT 402', 'Ruang Kelas', 40],
+            [3, 'GKT-303', 'Ruang Kelas GKT 303', 'Ruang Kelas', 40],
+            [3, 'GKT-304', 'Ruang Kelas GKT 304', 'Ruang Kelas', 40],
         ];
         foreach ($gktRoomsData as $r) {
             Room::create([
