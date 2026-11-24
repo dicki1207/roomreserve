@@ -138,19 +138,29 @@
             </div>
 
             <div class="card">
-                <div class="card-header">
-                    <div class="card-title">Jadwal Kuliah / Praktikum Lab Saya</div>
+                <div class="card-header" style="flex-wrap:wrap; gap:8px;">
+                    <div>
+                        <div class="card-title">Jadwal Kuliah / Praktikum Lab Saya</div>
+                        <div style="font-size:11.5px; color:#64748b;">Tanggal <strong>{{ $selectedDate }}</strong> @if($isToday) (Hari Ini) @endif</div>
+                    </div>
+                    <form method="GET" action="{{ route('role.kalab') }}" style="display:flex; gap:5px; align-items:center;">
+                        <input type="hidden" name="tab" value="dashboard">
+                        <input type="date" name="date" value="{{ $selectedDate }}" onchange="this.form.submit()" class="form-control" style="padding:4px 8px; font-size:11.5px; width:auto;">
+                        @if(!$isToday)
+                            <a href="{{ route('role.kalab') }}" class="btn btn-slate" style="padding:4px 8px; font-size:11px;">Hari Ini</a>
+                        @endif
+                    </form>
                 </div>
                 <div class="card-body">
                     @php
                         $managedLabIds = $myManagedLabs->pluck('id')->all();
-                        $labSchedules = $allSchedules->whereIn('room_id', $managedLabIds);
+                        $labSchedules = $dailySchedules->whereIn('room_id', $managedLabIds);
                     @endphp
                     @forelse($labSchedules as $cs)
                         <div style="padding:12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; background:#f8fafc;">
                             <div style="display:flex; justify-content:space-between; font-weight:600; color:#0f172a; margin-bottom:4px;">
                                 <span class="badge badge-royal">{{ $cs->room->room_code }}</span>
-                                <span style="color:#475569; font-size:12px;">{{ $cs->start_time }}–{{ $cs->end_time }}</span>
+                                <span style="color:#475569; font-size:12px;">{{ $cs->start_time }}–{{ $cs->end_time }} WIB</span>
                             </div>
                             <div style="font-weight:600; color:#1e293b;">{{ $cs->course_name }}</div>
                             @if(!empty($cs->class_name))
@@ -159,7 +169,7 @@
                             <div style="font-size:12px; color:#64748b;">Dosen: {{ $cs->lecturer->full_name }} • {{ $cs->schedule_date }}</div>
                         </div>
                     @empty
-                        <p style="color:#64748b; font-size:12.5px;">Belum ada jadwal kuliah/praktikum di laboratorium Anda.</p>
+                        <p style="color:#64748b; font-size:12.5px;">Tidak ada jadwal kuliah/praktikum di laboratorium Anda pada tanggal {{ $selectedDate }}.</p>
                     @endforelse
                 </div>
             </div>

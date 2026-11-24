@@ -6,7 +6,7 @@
 <div style="display:flex; gap:8px; flex-wrap:wrap;">
     <a href="{{ route('role.baak', ['tab' => 'dashboard']) }}" class="btn {{ $tab === 'dashboard' ? 'btn-navy' : 'btn-slate' }}">Persetujuan Peminjaman ({{ $allReservations->count() }})</a>
     <a href="{{ route('role.baak', ['tab' => 'students']) }}" class="btn {{ $tab === 'students' ? 'btn-navy' : 'btn-slate' }}">Data Mahasiswa ({{ $students->count() }})</a>
-    <a href="{{ route('role.baak', ['tab' => 'schedules']) }}" class="btn {{ $tab === 'schedules' ? 'btn-navy' : 'btn-slate' }}">Jadwal Kuliah &amp; Lab ({{ $allSchedules->count() }})</a>
+    <a href="{{ route('role.baak', ['tab' => 'schedules', 'date' => $selectedDate]) }}" class="btn {{ $tab === 'schedules' ? 'btn-navy' : 'btn-slate' }}">Jadwal Kuliah &amp; Lab ({{ $dailySchedules->count() }})</a>
     <a href="{{ route('role.baak', ['tab' => 'rooms']) }}" class="btn {{ $tab === 'rooms' ? 'btn-navy' : 'btn-slate' }}">Data Ruangan & Lab ({{ $allRooms->count() }})</a>
     <a href="{{ route('role.baak', ['tab' => 'calendar']) }}" class="btn {{ $tab === 'calendar' ? 'btn-navy' : 'btn-slate' }}">Kalender Ruangan</a>
 </div>
@@ -233,8 +233,22 @@
 @elseif($tab === 'schedules')
     <div class="grid-main-side">
         <div class="card">
-            <div class="card-header">
-                <div class="card-title">Daftar Jadwal Kuliah Ruang GKT &amp; Laboratorium TI</div>
+            <div class="card-header" style="flex-wrap:wrap; gap:10px;">
+                <div>
+                    <div class="card-title">Daftar Jadwal Kuliah Ruang GKT &amp; Laboratorium TI</div>
+                    <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                        Menampilkan jadwal khusus tanggal <strong>{{ $selectedDate }}</strong>
+                        @if($isToday) (Hari Ini) @endif
+                    </div>
+                </div>
+                <form method="GET" action="{{ route('role.baak') }}" style="display:flex; gap:6px; align-items:center;">
+                    <input type="hidden" name="tab" value="schedules">
+                    <label style="font-size:12px; color:#475569; font-weight:600;">Tanggal:</label>
+                    <input type="date" name="date" value="{{ $selectedDate }}" onchange="this.form.submit()" class="form-control" style="padding:5px 9px; font-size:12px; width:auto;">
+                    @if(!$isToday)
+                        <a href="{{ route('role.baak', ['tab' => 'schedules']) }}" class="btn btn-slate" style="padding:5px 9px; font-size:11.5px;">Hari Ini</a>
+                    @endif
+                </form>
             </div>
             <div class="table-wrap">
                 <table class="rr-table">
@@ -249,7 +263,13 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($allSchedules as $cs)
+                        @php
+                            $indoDays = [1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu', 4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu'];
+                        @endphp
+                        @forelse($dailySchedules as $cs)
+                            @php
+                                $dayLabel = $indoDays[\Carbon\Carbon::parse($cs->schedule_date)->dayOfWeekIso] ?? '';
+                            @endphp
                             <tr>
                                 <td>
                                     <span class="badge {{ $cs->room->building->name === 'TI' ? 'badge-royal' : 'badge-navy' }}">{{ $cs->room->room_code }}</span>
@@ -258,19 +278,34 @@
                                 <td><strong>{{ $cs->course_name }}</strong></td>
                                 <td><span class="badge badge-royal">{{ $cs->class_name ?: '-' }}</span></td>
                                 <td>{{ $cs->lecturer->full_name }}</td>
-                                <td>{{ $cs->schedule_date }}<br><span style="color:#64748b; font-size:12px;">{{ $cs->start_time }}–{{ $cs->end_time }}</span></td>
                                 <td>
-                                    <div style="display:flex; gap:6px;">
+                                    <strong>{{ $dayLabel }}, {{ $cs->schedule_date }}</strong><br>
+                                    <span style="color:#64748b; font-size:12px;">{{ $cs->start_time }}–{{ $cs->end_time }} WIB</span>
+                                </td>
+                                <td>
+                                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                         <button type="button"
                                                 onclick="openEditScheduleModal({{ $cs->id }}, {{ $cs->room_id }}, {{ $cs->lecturer_id }}, '{{ addslashes($cs->course_name) }}', '{{ addslashes($cs->class_name ?? '') }}', '{{ $cs->schedule_date }}', '{{ $cs->start_time }}', '{{ $cs->end_time }}')"
                                                 class="btn btn-slate" style="padding:4px 8px; font-size:11.5px;">
                                             Edit
                                         </button>
-                                        <form method="POST" action="{{ route('baak.schedules.destroy', $cs->id) }}" onsubmit="return confirm('Hapus jadwal kuliah ini?')">
+                                        <form method="POST" action="{{ route('baak.schedules.destroy', $cs->id) }}" onsubmit="return confirm('Hapus jadwal kuliah tanggal {{ $cs->schedule_date }} ini?')">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-rose" style="padding:4px 8px; font-size:11.5px;">
                                                 Hapus
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('baak.schedules.destroySeries') }}" onsubmit="return confirm('Hapus seluruh seri jadwal mingguan {{ addslashes($cs->course_name) }} ({{ $cs->class_name ?: '-' }}) di ruang {{ $cs->room->room_code }} pada jam {{ $cs->start_time }}–{{ $cs->end_time }}?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <input type="hidden" name="room_id" value="{{ $cs->room_id }}">
+                                            <input type="hidden" name="course_name" value="{{ $cs->course_name }}">
+                                            <input type="hidden" name="class_name" value="{{ $cs->class_name }}">
+                                            <input type="hidden" name="start_time" value="{{ $cs->start_time }}">
+                                            <input type="hidden" name="end_time" value="{{ $cs->end_time }}">
+                                            <button type="submit" class="btn btn-slate" style="padding:4px 8px; font-size:11px; color:#be123c; border-color:#fecdd3;" title="Hapus semua pertemuan berulang untuk kelas & jam ini">
+                                                Hapus Seri
                                             </button>
                                         </form>
                                     </div>
@@ -278,7 +313,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" style="text-align:center; color:#64748b; padding:24px;">Belum ada jadwal kuliah. Gunakan form di sebelah kanan untuk menambahkan jadwal.</td>
+                                <td colspan="6" style="text-align:center; color:#64748b; padding:24px;">Belum ada jadwal kuliah pada tanggal <strong>{{ $selectedDate }}</strong>. Pilih tanggal lain di atas atau tambahkan jadwal di sebelah kanan.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -341,18 +376,66 @@
                         @endforeach
                     </select>
                 </div>
+
+                <!-- TOMBOL HARI SENIN - MINGGU (TEKAN NYALA -> OTOMATIS SETIAP HARI YANG DIPILIH) -->
                 <div class="form-group">
-                    <label class="form-label">Tanggal</label>
-                    <input type="date" name="schedule_date" value="{{ date('Y-m-d') }}" required class="form-control">
+                    <label class="form-label">Pilih Hari Otomatis (Senin – Minggu)</label>
+                    <div style="font-size:11.5px; color:#64748b; margin-bottom:6px;">
+                        Tekan tombol hari hingga menyala agar jadwal otomatis dibuat rutin setiap hari yang dipilih:
+                    </div>
+                    @php
+                        $dayButtons = [
+                            1 => 'Senin',
+                            2 => 'Selasa',
+                            3 => 'Rabu',
+                            4 => 'Kamis',
+                            5 => 'Jumat',
+                            6 => 'Sabtu',
+                            7 => 'Minggu',
+                        ];
+                    @endphp
+                    <div class="day-selector-grid">
+                        @foreach($dayButtons as $dayNum => $dayName)
+                            <button type="button"
+                                    class="day-toggle-btn"
+                                    data-day="{{ $dayNum }}"
+                                    data-name="{{ $dayName }}"
+                                    onclick="toggleScheduleDay(this)">
+                                <span class="day-toggle-dot"></span>
+                                <span>{{ $dayName }}</span>
+                            </button>
+                            <input type="checkbox" name="repeat_days[]" value="{{ $dayNum }}" id="repeat-day-{{ $dayNum }}" class="hidden">
+                        @endforeach
+                    </div>
+
+                    <div id="repeat-days-panel" class="repeat-days-panel hidden">
+                        <div style="font-weight:700; margin-bottom:6px;">
+                            Jadwal Otomatis Aktif: <span id="repeat-days-summary">-</span>
+                        </div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <label for="repeat-weeks-select" style="font-size:11.5px; color:#1e40af; font-weight:600;">Durasi Perkuliahan:</label>
+                            <select name="repeat_weeks" id="repeat-weeks-select" class="form-control" style="width:auto; padding:4px 10px; font-size:12px; background:#ffffff;">
+                                <option value="4">4 Minggu (1 Bulan)</option>
+                                <option value="8">8 Minggu (Setengah Semester)</option>
+                                <option value="14">14 Minggu</option>
+                                <option value="16" selected>16 Minggu (1 Semester)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" id="schedule-date-label">Tanggal</label>
+                    <input type="date" name="schedule_date" id="baak-schedule-date" value="{{ date('Y-m-d') }}" required class="form-control">
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group">
                     <div>
                         <label class="form-label">Jam Mulai</label>
-                        <input type="time" name="start_time" value="08:00" required class="form-control">
+                        <input type="time" name="start_time" value="08:00" min="08:00" max="21:30" required class="form-control">
                     </div>
                     <div>
                         <label class="form-label">Jam Selesai</label>
-                        <input type="time" name="end_time" value="10:30" required class="form-control">
+                        <input type="time" name="end_time" value="10:30" min="08:00" max="21:30" required class="form-control">
                     </div>
                 </div>
                 <button type="submit" class="btn btn-navy" style="width:100%;">Simpan Jadwal</button>
@@ -424,11 +507,11 @@
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;" class="form-group">
                     <div>
                         <label class="form-label">Jam Mulai</label>
-                        <input type="time" name="start_time" id="edit-sched-start" required class="form-control">
+                        <input type="time" name="start_time" id="edit-sched-start" min="08:00" max="21:30" required class="form-control">
                     </div>
                     <div>
                         <label class="form-label">Jam Selesai</label>
-                        <input type="time" name="end_time" id="edit-sched-end" required class="form-control">
+                        <input type="time" name="end_time" id="edit-sched-end" min="08:00" max="21:30" required class="form-control">
                     </div>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:8px; padding-top:12px; border-top:1px solid #e2e8f0;">
@@ -725,6 +808,46 @@ function closeEditStudentModal() {
     document.getElementById('edit-student-modal').classList.remove('show');
 }
 
+function toggleScheduleDay(btn) {
+    const dayNum = btn.getAttribute('data-day');
+    const cb = document.getElementById('repeat-day-' + dayNum);
+    if (!cb) return;
+
+    cb.checked = !cb.checked;
+    btn.classList.toggle('active', cb.checked);
+
+    const activeBtns = Array.from(document.querySelectorAll('.day-toggle-btn.active'));
+    const panel = document.getElementById('repeat-days-panel');
+    const summary = document.getElementById('repeat-days-summary');
+    const dateLabel = document.getElementById('schedule-date-label');
+
+    if (activeBtns.length > 0) {
+        const names = activeBtns.map(b => b.getAttribute('data-name')).join(', ');
+        if (summary) summary.textContent = 'Setiap ' + names;
+        if (panel) panel.classList.remove('hidden');
+        if (dateLabel) dateLabel.textContent = 'Mulai Dari Tanggal';
+    } else {
+        if (panel) panel.classList.add('hidden');
+        if (dateLabel) dateLabel.textContent = 'Tanggal';
+    }
+}
+
+function syncBaakEndTime(startId, endId) {
+    const startSel = document.getElementById(startId);
+    const endSel = document.getElementById(endId);
+    if (!startSel || !endSel) return;
+    const startVal = startSel.value;
+    let firstValid = null;
+    Array.from(endSel.options).forEach(opt => {
+        const disabled = opt.value <= startVal;
+        opt.disabled = disabled;
+        if (!disabled && !firstValid) firstValid = opt.value;
+    });
+    if (endSel.value <= startVal && firstValid) {
+        endSel.value = firstValid;
+    }
+}
+
 function openEditScheduleModal(id, roomId, lecturerId, course, className, date, start, end) {
     const modal = document.getElementById('edit-schedule-modal');
     document.getElementById('edit-schedule-form').action = '/baak/schedules/' + id;
@@ -750,6 +873,7 @@ function openEditScheduleModal(id, roomId, lecturerId, course, className, date, 
     document.getElementById('edit-sched-date').value = date;
     document.getElementById('edit-sched-start').value = start;
     document.getElementById('edit-sched-end').value = end;
+
     modal.classList.add('show');
 }
 function closeEditScheduleModal() {

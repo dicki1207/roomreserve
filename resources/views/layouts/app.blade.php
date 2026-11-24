@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>RoomReserve — @yield('title', 'Sistem Peminjaman Ruangan')</title>
     <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}?v=2">
     <link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=2">
     <link rel="apple-touch-icon" href="{{ asset('images/logo-icon.png') }}?v=2">
-    <link rel="stylesheet" href="{{ asset('css/roomreserve-tailwind.css') }}?v=13">
+    <link rel="stylesheet" href="{{ asset('css/roomreserve-tailwind.css') }}?v=14">
 </head>
 <body>
 
@@ -192,6 +193,63 @@
                         @if(in_array($user->role, ['mahasiswa', 'dosen']))
                             <button type="button" onclick="openReserveModal()" class="btn btn-navy">+ Ajukan Peminjaman</button>
                         @endif
+
+                        <!-- LONCENG NOTIFIKASI DI POJOK KANAN ATAS (SCROLLABLE MINI TAB + BISA DIHAPUS) -->
+                        <div class="notif-wrapper" id="notif-wrapper">
+                            @php
+                                $notifList = $userNotifications ?? collect();
+                                $unreadCount = $unreadNotifCount ?? 0;
+                            @endphp
+                            <button type="button" id="notif-bell-btn" onclick="toggleNotifDropdown(event)" class="notif-bell-btn" title="Notifikasi">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                </svg>
+                                <span id="notif-unread-badge" class="notif-badge {{ $unreadCount > 0 ? '' : 'hidden' }}">{{ $unreadCount }}</span>
+                            </button>
+
+                            <div id="notif-dropdown" class="notif-dropdown">
+                                <div class="notif-header">
+                                    <div class="notif-header-title">
+                                        <span>Notifikasi</span>
+                                        <span id="notif-count-pill" class="nav-pill">{{ $notifList->count() }}</span>
+                                    </div>
+                                    <button type="button"
+                                            id="notif-clear-all-btn"
+                                            onclick="clearAllNotifs()"
+                                            class="notif-clear-btn {{ $notifList->isEmpty() ? 'hidden' : '' }}">
+                                        Hapus Semua
+                                    </button>
+                                </div>
+
+                                <div id="notif-scroll-area" class="notif-scroll-area">
+                                    @forelse($notifList as $nf)
+                                        <div class="notif-item {{ !$nf->is_read ? 'unread' : '' }}" data-notif-id="{{ $nf->id }}">
+                                            <div style="min-width:0; flex:1;">
+                                                <div class="notif-item-title {{ $nf->type === 'rejected' ? 'rejected' : 'approved' }}">
+                                                    <span>{{ $nf->type === 'rejected' ? '✕' : '✓' }}</span>
+                                                    <span>{{ $nf->title }}</span>
+                                                </div>
+                                                <div class="notif-item-msg">{{ $nf->message }}</div>
+                                                <div class="notif-item-time">
+                                                    {{ $nf->created_at ? $nf->created_at->format('d M Y • H:i') . ' WIB' : '' }}
+                                                </div>
+                                            </div>
+                                            <button type="button"
+                                                    onclick="deleteNotifItem({{ $nf->id }}, this)"
+                                                    class="notif-delete-btn"
+                                                    title="Hapus notifikasi ini">
+                                                ✕
+                                            </button>
+                                        </div>
+                                    @empty
+                                        <div class="notif-empty" id="notif-empty-state">
+                                            Belum ada notifikasi peminjaman ruangan.
+                                        </div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </header>
 
@@ -259,11 +317,11 @@
                         </div>
                         <div>
                             <label class="form-label">Jam Mulai</label>
-                            <input type="time" name="start_time" id="modal-start" value="08:30" onchange="updateRoutingPreview()" class="form-control">
+                            <input type="time" name="start_time" id="modal-start" value="08:30" min="08:00" max="21:30" onchange="updateRoutingPreview()" oninput="updateRoutingPreview()" class="form-control">
                         </div>
                         <div>
                             <label class="form-label">Jam Selesai</label>
-                            <input type="time" name="end_time" id="modal-end" value="10:30" onchange="updateRoutingPreview()" class="form-control">
+                            <input type="time" name="end_time" id="modal-end" value="10:30" min="08:00" max="21:30" onchange="updateRoutingPreview()" oninput="updateRoutingPreview()" class="form-control">
                         </div>
                     </div>
 
@@ -278,7 +336,7 @@
 
                     <div style="display:flex; justify-content:flex-end; gap:8px; padding-top:12px; border-top:1px solid #e2e8f0;">
                         <button type="button" onclick="closeReserveModal()" class="btn btn-slate">Batal</button>
-                        <button type="submit" class="btn btn-navy">Kirim Pengajuan</button>
+                        <button type="submit" id="reserve-submit-btn" class="btn btn-navy">Kirim Pengajuan</button>
                     </div>
                 </form>
             </div>
@@ -318,7 +376,8 @@
 
     <script>
         @php
-            $jsSchedules = isset($allSchedules) ? $allSchedules->map(fn($cs) => [
+            $needScheduleJson = auth()->check() && in_array(auth()->user()->role, ['mahasiswa', 'dosen'], true);
+            $jsSchedules = ($needScheduleJson && isset($allSchedules)) ? $allSchedules->map(fn($cs) => [
                 'room_id' => $cs->room_id,
                 'schedule_date' => $cs->schedule_date,
                 'start_time' => $cs->start_time,
@@ -328,7 +387,7 @@
                 'lecturer_name' => $cs->lecturer?->full_name ?? 'Dosen',
             ])->values() : collect();
 
-            $jsApproved = isset($allReservations) ? $allReservations->where('status', 'DISETUJUI')->map(fn($r) => [
+            $jsApproved = ($needScheduleJson && isset($allReservations)) ? $allReservations->where('status', 'DISETUJUI')->map(fn($r) => [
                 'room_id' => $r->room_id,
                 'reservation_date' => $r->reservation_date,
                 'start_time' => $r->start_time,
@@ -356,6 +415,52 @@
                 const btn = document.getElementById('filter-' + b);
                 if (btn) btn.className = (b === building) ? 'btn btn-navy' : 'btn btn-slate';
             });
+        }
+
+        function timeToMinutes(t) {
+            if (!t || !t.includes(':')) return -1;
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function computeCoveredMinutes(intervals) {
+            const minOpen = 8 * 60;
+            const maxClose = 21 * 60 + 30;
+            const clamped = [];
+            intervals.forEach(([s, e]) => {
+                const cs = Math.max(minOpen, s);
+                const ce = Math.min(maxClose, e);
+                if (cs < ce) clamped.push([cs, ce]);
+            });
+            if (!clamped.length) return 0;
+            clamped.sort((a, b) => a[0] - b[0]);
+            const merged = [clamped[0]];
+            for (let i = 1; i < clamped.length; i++) {
+                const last = merged[merged.length - 1];
+                if (clamped[i][0] <= last[1]) {
+                    last[1] = Math.max(last[1], clamped[i][1]);
+                } else {
+                    merged.push(clamped[i]);
+                }
+            }
+            return merged.reduce((sum, [s, e]) => sum + (e - s), 0);
+        }
+
+        function checkRoomFullState(roomId, date) {
+            const totalSpan = (21 * 60 + 30) - (8 * 60); // 810 menit
+            const appList = approvedReservations
+                .filter(r => parseInt(r.room_id, 10) === roomId && r.reservation_date === date)
+                .map(r => [timeToMinutes(r.start_time), timeToMinutes(r.end_time)]);
+            const clsList = classSchedules
+                .filter(cs => parseInt(cs.room_id, 10) === roomId && cs.schedule_date === date)
+                .map(cs => [timeToMinutes(cs.start_time), timeToMinutes(cs.end_time)]);
+
+            const appCovered = computeCoveredMinutes(appList);
+            const allCovered = computeCoveredMinutes(appList.concat(clsList));
+            return {
+                isFullApproved: appCovered >= totalSpan,
+                isFullAll: allCovered >= totalSpan,
+            };
         }
 
         function openReserveModal(roomId = null, targetDate = null) {
@@ -386,9 +491,34 @@
             const date = document.getElementById('modal-date').value;
             const start = document.getElementById('modal-start').value;
             const end = document.getElementById('modal-end').value;
+            const submitBtn = document.getElementById('reserve-submit-btn');
 
             const box = document.getElementById('routing-preview-box');
             const text = document.getElementById('routing-preview-text');
+
+            const fullState = checkRoomFullState(roomId, date);
+            if (fullState.isFullApproved || (fullState.isFullAll && building === 'TI')) {
+                box.className = 'reason-box rejected';
+                text.innerHTML = '<strong>Status Ruangan PENUH:</strong> Seluruh jam operasional kampus (08:00–21:30 WIB) pada tanggal ini sudah terpakai.';
+                if (submitBtn) submitBtn.disabled = true;
+                return;
+            }
+
+            const startMin = timeToMinutes(start);
+            const endMin = timeToMinutes(end);
+            if (startMin < 8 * 60 || endMin > (21 * 60 + 30)) {
+                box.className = 'reason-box rejected';
+                text.innerHTML = '<strong>Batas Jam Operasional:</strong> Peminjaman hanya diperbolehkan pukul <strong>08:00 – 21:30 WIB</strong>.';
+                if (submitBtn) submitBtn.disabled = true;
+                return;
+            }
+
+            if (startMin >= endMin) {
+                box.className = 'reason-box rejected';
+                text.innerHTML = '<strong>Waktu Tidak Valid:</strong> Jam mulai harus lebih awal daripada jam selesai.';
+                if (submitBtn) submitBtn.disabled = true;
+                return;
+            }
 
             const conflictRes = approvedReservations.find(r =>
                 parseInt(r.room_id, 10) === roomId &&
@@ -398,9 +528,12 @@
 
             if (conflictRes) {
                 box.className = 'reason-box rejected';
-                text.innerHTML = '<strong>Jadwal Bentrok:</strong> Sudah disetujui untuk <em>"' + conflictRes.purpose + '"</em> (' + conflictRes.start_time + '–' + conflictRes.end_time + ').';
+                text.innerHTML = '<strong>Jadwal Bentrok:</strong> Sudah disetujui untuk <em>"' + conflictRes.purpose + '"</em> (' + conflictRes.start_time + '–' + conflictRes.end_time + ' WIB).';
+                if (submitBtn) submitBtn.disabled = true;
                 return;
             }
+
+            if (submitBtn) submitBtn.disabled = false;
 
             const conflictClass = classSchedules.find(cs =>
                 parseInt(cs.room_id, 10) === roomId &&
@@ -428,6 +561,99 @@
                 box.className = 'reason-box approved';
                 text.innerHTML = 'Tidak ada jadwal kuliah pada jam ini. Persetujuan dikirim ke <strong>BAAK</strong>.';
             }
+        }
+
+        // =====================================================================
+        // NOTIFIKASI LONCENG (MINI TAB SCROLLABLE & HAPUS NOTIFIKASI)
+        // =====================================================================
+        function getCsrfToken() {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            return meta ? meta.getAttribute('content') : '';
+        }
+
+        function toggleNotifDropdown(e) {
+            if (e) e.stopPropagation();
+            const dropdown = document.getElementById('notif-dropdown');
+            const bellBtn = document.getElementById('notif-bell-btn');
+            if (!dropdown) return;
+
+            const isOpen = dropdown.classList.toggle('open');
+            if (bellBtn) bellBtn.classList.toggle('active', isOpen);
+
+            if (isOpen) {
+                const badge = document.getElementById('notif-unread-badge');
+                if (badge && !badge.classList.contains('hidden')) {
+                    badge.classList.add('hidden');
+                    badge.textContent = '0';
+                    document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+                    fetch('/notifications/read-all', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'Accept': 'application/json',
+                        }
+                    }).catch(() => {});
+                }
+            }
+        }
+
+        document.addEventListener('click', function (e) {
+            const wrapper = document.getElementById('notif-wrapper');
+            const dropdown = document.getElementById('notif-dropdown');
+            const bellBtn = document.getElementById('notif-bell-btn');
+            if (wrapper && dropdown && !wrapper.contains(e.target)) {
+                dropdown.classList.remove('open');
+                if (bellBtn) bellBtn.classList.remove('active');
+            }
+        });
+
+        function refreshNotifHeaderCount() {
+            const items = document.querySelectorAll('#notif-scroll-area .notif-item');
+            const countPill = document.getElementById('notif-count-pill');
+            const clearBtn = document.getElementById('notif-clear-all-btn');
+            const scrollArea = document.getElementById('notif-scroll-area');
+
+            if (countPill) countPill.textContent = String(items.length);
+            if (clearBtn) clearBtn.classList.toggle('hidden', items.length === 0);
+
+            if (items.length === 0 && scrollArea && !document.getElementById('notif-empty-state')) {
+                scrollArea.innerHTML = '<div class="notif-empty" id="notif-empty-state">Belum ada notifikasi peminjaman ruangan.</div>';
+            }
+        }
+
+        function deleteNotifItem(id, btn) {
+            const item = btn.closest('.notif-item');
+            fetch('/notifications/' + id, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'Accept': 'application/json',
+                }
+            }).then(() => {
+                if (item) item.remove();
+                refreshNotifHeaderCount();
+            }).catch(() => {});
+        }
+
+        function clearAllNotifs() {
+            fetch('/notifications/all', {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'Accept': 'application/json',
+                }
+            }).then(() => {
+                const scrollArea = document.getElementById('notif-scroll-area');
+                const badge = document.getElementById('notif-unread-badge');
+                if (scrollArea) {
+                    scrollArea.innerHTML = '<div class="notif-empty" id="notif-empty-state">Belum ada notifikasi peminjaman ruangan.</div>';
+                }
+                if (badge) {
+                    badge.classList.add('hidden');
+                    badge.textContent = '0';
+                }
+                refreshNotifHeaderCount();
+            }).catch(() => {});
         }
 
         function openRejectModal(id, code, roomName) {

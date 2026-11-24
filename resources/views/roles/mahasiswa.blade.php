@@ -113,21 +113,35 @@
         </div>
 
         <div class="card">
-            <div class="card-header">
-                <div class="card-title">Jadwal Kuliah GKT</div>
+            <div class="card-header" style="flex-wrap:wrap; gap:8px;">
+                <div>
+                    <div class="card-title">Jadwal Kuliah GKT &amp; Lab</div>
+                    <div style="font-size:11.5px; color:#64748b; margin-top:1px;">
+                        Tanggal <strong>{{ $selectedDate }}</strong> @if($isToday) (Hari Ini) @endif
+                    </div>
+                </div>
+                <form method="GET" action="{{ route('role.mahasiswa') }}" style="display:flex; gap:5px; align-items:center;">
+                    <input type="hidden" name="tab" value="dashboard">
+                    <input type="date" name="date" value="{{ $selectedDate }}" onchange="this.form.submit()" class="form-control" style="padding:4px 8px; font-size:11.5px; width:auto;">
+                    @if(!$isToday)
+                        <a href="{{ route('role.mahasiswa') }}" class="btn btn-slate" style="padding:4px 8px; font-size:11px;">Hari Ini</a>
+                    @endif
+                </form>
             </div>
             <div class="card-body">
-                @forelse($allSchedules as $cs)
+                @forelse($dailySchedules as $cs)
                     <div style="padding:11px 12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px; font-size:12.5px; background:#f8fafc;">
                         <div style="display:flex; justify-content:space-between; font-weight:600; color:#0f172a; margin-bottom:2px;">
                             <span>{{ $cs->room->room_code }}</span>
-                            <span style="color:#475569;">{{ $cs->start_time }}–{{ $cs->end_time }}</span>
+                            <span style="color:#475569;">{{ $cs->start_time }}–{{ $cs->end_time }} WIB</span>
                         </div>
-                        <div style="font-weight:500; color:#1e293b;">{{ $cs->course_name }}</div>
+                        <div style="font-weight:500; color:#1e293b;">
+                            {{ $cs->course_name }}@if(!empty($cs->class_name)) ({{ $cs->class_name }})@endif
+                        </div>
                         <div style="color:#64748b; font-size:11.5px;">{{ $cs->lecturer->full_name }} • {{ $cs->schedule_date }}</div>
                     </div>
                 @empty
-                    <p style="color:#64748b; font-size:12.5px;">Belum ada jadwal perkuliahan terdaftar.</p>
+                    <p style="color:#64748b; font-size:12.5px;">Tidak ada jadwal perkuliahan pada tanggal {{ $selectedDate }}.</p>
                 @endforelse
             </div>
         </div>
@@ -168,11 +182,11 @@
                 </div>
                 <div>
                     <label class="form-label">Jam Mulai</label>
-                    <input type="time" name="start_time" id="edit-modal-start" required class="form-control">
+                    <input type="time" name="start_time" id="edit-modal-start" min="08:00" max="21:30" required class="form-control">
                 </div>
                 <div>
                     <label class="form-label">Jam Selesai</label>
-                    <input type="time" name="end_time" id="edit-modal-end" required class="form-control">
+                    <input type="time" name="end_time" id="edit-modal-end" min="08:00" max="21:30" required class="form-control">
                 </div>
             </div>
 

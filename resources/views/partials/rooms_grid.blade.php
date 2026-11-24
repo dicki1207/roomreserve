@@ -79,11 +79,18 @@
                             {{ $st['badge_label'] }}
                         </span>
                         @if($r->status === 'available' && ($canBorrow ?? true))
-                            <button type="button"
-                                    onclick="openReserveModal({{ $r->id }}, '{{ $selectedDate }}')"
-                                    class="btn btn-navy" style="padding:6px 12px; font-size:12px;">
-                                {{ $st['is_busy_now'] ? 'Pinjam Jam Lain' : 'Pinjam Ruang Ini' }}
-                            </button>
+                            @if(($st['is_full_approved'] ?? false) || (($st['is_full'] ?? false) && $r->building->name === 'TI'))
+                                <button type="button" disabled
+                                        class="btn btn-slate" style="padding:6px 12px; font-size:12px; opacity:0.65; cursor:not-allowed;">
+                                    Penuh (08:00–21:30)
+                                </button>
+                            @else
+                                <button type="button"
+                                        onclick="openReserveModal({{ $r->id }}, '{{ $selectedDate }}')"
+                                        class="btn btn-navy" style="padding:6px 12px; font-size:12px;">
+                                    {{ $st['is_busy_now'] ? 'Pinjam Jam Lain' : 'Pinjam Ruang Ini' }}
+                                </button>
+                            @endif
                         @endif
                     </div>
                 </div>

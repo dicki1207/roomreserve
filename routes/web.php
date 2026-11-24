@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     AuthController::ensureSeeded();
     if (Auth::check()) {
-        return redirect()->route('role.' . Auth::user()->role);
+        return redirect()->route('role.'.Auth::user()->role);
     }
+
     return redirect()->route('login');
 });
 
@@ -56,6 +57,7 @@ Route::middleware(['auth', 'role:baak'])->prefix('baak')->group(function () {
     // CRUD Jadwal Kuliah GKT
     Route::post('/schedules', [RoomReserveController::class, 'storeSchedule'])->name('baak.schedules.store');
     Route::put('/schedules/{id}', [RoomReserveController::class, 'updateSchedule'])->name('baak.schedules.update');
+    Route::delete('/schedules/series', [RoomReserveController::class, 'destroyScheduleSeries'])->name('baak.schedules.destroySeries');
     Route::delete('/schedules/{id}', [RoomReserveController::class, 'destroySchedule'])->name('baak.schedules.destroy');
 
     // CRUD Master Ruangan & Laboratorium
@@ -97,4 +99,11 @@ Route::middleware(['auth'])->prefix('profile')->group(function () {
     Route::get('/', [RoomReserveController::class, 'showProfile'])->name('profile.show');
     Route::post('/avatar', [RoomReserveController::class, 'updateProfileAvatar'])->name('profile.avatar');
     Route::post('/password-request', [RoomReserveController::class, 'requestOwnPasswordReset'])->name('profile.password.request');
+});
+
+// Notifikasi Pengguna (Mahasiswa, Dosen, & Seluruh Role)
+Route::middleware(['auth'])->prefix('notifications')->group(function () {
+    Route::post('/read-all', [RoomReserveController::class, 'markNotificationsRead'])->name('notifications.readAll');
+    Route::delete('/all', [RoomReserveController::class, 'destroyAllNotifications'])->name('notifications.destroyAll');
+    Route::delete('/{id}', [RoomReserveController::class, 'destroyNotification'])->name('notifications.destroy');
 });

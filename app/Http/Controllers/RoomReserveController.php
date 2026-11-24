@@ -10,14 +10,143 @@ use App\Models\PasswordResetRequest;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\User;
+use App\Models\UserNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class RoomReserveController extends Controller
 {
+    public const OPERATIONAL_START = '08:00';
+
+    public const OPERATIONAL_END = '21:30';
+
+    /**
+     * Pilihan Jam Mulai (08:00 s/d 21:00 WIB, interval 30 menit)
+     */
+    public static function operationalStartSlots(): array
+    {
+        $slots = [];
+        for ($m = 8 * 60; $m <= 21 * 60; $m += 30) {
+            $slots[] = sprintf('%02d:%02d', intdiv($m, 60), $m % 60);
+        }
+
+        return $slots;
+    }
+
+    /**
+     * Pilihan Jam Selesai (08:30 s/d 21:30 WIB, interval 30 menit)
+     */
+    public static function operationalEndSlots(): array
+    {
+        $slots = [];
+        for ($m = 8 * 60 + 30; $m <= 21 * 60 + 30; $m += 30) {
+            $slots[] = sprintf('%02d:%02d', intdiv($m, 60), $m % 60);
+        }
+
+        return $slots;
+    }
+
+    private function timeToMinutes(string $time): int
+    {
+        if (! preg_match('/^(\d{2}):(\d{2})$/', trim($time), $m)) {
+            return -1;
+        }
+
+        return ((int) $m[1]) * 60 + ((int) $m[2]);
+    }
+
+    private function validateOperationalTime(string $startTime, string $endTime): ?string
+    {
+        $startMin = $this->timeToMinutes($startTime);
+        $endMin = $this->timeToMinutes($endTime);
+        $minOpen = 8 * 60;       // 08:00
+        $maxClose = 21 * 60 + 30; // 21:30
+
+        if ($startMin < 0 || $endMin < 0) {
+            return 'Format waktu tidak valid.';
+        }
+        if ($startMin < $minOpen || $endMin > $maxClose) {
+            return 'Jam operasional kampus hanya berlaku pukul 08:00 sampai 21:30 WIB.';
+        }
+        if ($startMin >= $endMin) {
+            return 'Waktu mulai harus lebih awal daripada waktu selesai.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Hitung apakah rentang jam operasional (08:00 - 21:30) sudah terpakai penuh
+     */
+    private function computeOperationalCoverage($dayApproved, $daySchedules): array
+    {
+        $minOpen = 8 * 60;       // 480
+        $maxClose = 21 * 60 + 30; // 1290
+        $totalSpan = $maxClose - $minOpen; // 810 menit
+
+        $mergeSum = function (array $rawIntervals) use ($minOpen, $maxClose): int {
+            $clamped = [];
+            foreach ($rawIntervals as [$s, $e]) {
+                $cs = max($minOpen, $s);
+                $ce = min($maxClose, $e);
+                if ($cs < $ce) {
+                    $clamped[] = [$cs, $ce];
+                }
+            }
+            if (empty($clamped)) {
+                return 0;
+            }
+            usort($clamped, fn ($a, $b) => $a[0] <=> $b[0]);
+            $merged = [$clamped[0]];
+            for ($i = 1, $n = count($clamped); $i < $n; $i++) {
+                $lastIdx = count($merged) - 1;
+                if ($clamped[$i][0] <= $merged[$lastIdx][1]) {
+                    $merged[$lastIdx][1] = max($merged[$lastIdx][1], $clamped[$i][1]);
+                } else {
+                    $merged[] = $clamped[$i];
+                }
+            }
+            $sum = 0;
+            foreach ($merged as [$ms, $me]) {
+                $sum += ($me - $ms);
+            }
+
+            return $sum;
+        };
+
+        $approvedIntervals = [];
+        foreach ($dayApproved as $res) {
+            $s = $this->timeToMinutes((string) $res->start_time);
+            $e = $this->timeToMinutes((string) $res->end_time);
+            if ($s >= 0 && $e > $s) {
+                $approvedIntervals[] = [$s, $e];
+            }
+        }
+
+        $allIntervals = $approvedIntervals;
+        foreach ($daySchedules as $cs) {
+            $s = $this->timeToMinutes((string) $cs->start_time);
+            $e = $this->timeToMinutes((string) $cs->end_time);
+            if ($s >= 0 && $e > $s) {
+                $allIntervals[] = [$s, $e];
+            }
+        }
+
+        $approvedCovered = $mergeSum($approvedIntervals);
+        $totalCovered = $mergeSum($allIntervals);
+
+        return [
+            'is_full' => $totalCovered >= $totalSpan,
+            'is_full_approved' => $approvedCovered >= $totalSpan,
+            'free_minutes' => max(0, $totalSpan - $totalCovered),
+        ];
+    }
+
     /**
      * Data umum yang dibutuhkan oleh komponen kalender, daftar ruangan (berbasis tanggal & jam WIB), & modal pengajuan
      */
@@ -47,37 +176,43 @@ class RoomReserveController extends Controller
         $roomStatuses = [];
         foreach ($allRooms as $r) {
             $dayApproved = $allReservations
-                ->filter(fn($res) => (int) $res->room_id === (int) $r->id
+                ->filter(fn ($res) => (int) $res->room_id === (int) $r->id
                     && $res->status === 'DISETUJUI'
                     && $res->reservation_date === $selectedDate)
                 ->sortBy('start_time')
                 ->values();
 
             $daySchedules = $allSchedules
-                ->filter(fn($cs) => (int) $cs->room_id === (int) $r->id
+                ->filter(fn ($cs) => (int) $cs->room_id === (int) $r->id
                     && $cs->schedule_date === $selectedDate)
                 ->sortBy('start_time')
                 ->values();
 
+            $coverage = $this->computeOperationalCoverage($dayApproved, $daySchedules);
+
             $activeBookingNow = $isToday
-                ? $dayApproved->first(fn($res) => $res->start_time <= $nowTime && $res->end_time > $nowTime)
+                ? $dayApproved->first(fn ($res) => $res->start_time <= $nowTime && $res->end_time > $nowTime)
                 : null;
 
             $activeClassNow = $isToday
-                ? $daySchedules->first(fn($cs) => $cs->start_time <= $nowTime && $cs->end_time > $nowTime)
+                ? $daySchedules->first(fn ($cs) => $cs->start_time <= $nowTime && $cs->end_time > $nowTime)
                 : null;
 
             $relevantApproved = $isToday
-                ? $dayApproved->filter(fn($res) => $res->end_time > $nowTime)->values()
+                ? $dayApproved->filter(fn ($res) => $res->end_time > $nowTime)->values()
                 : $dayApproved;
 
             $relevantSchedules = $isToday
-                ? $daySchedules->filter(fn($cs) => $cs->end_time > $nowTime)->values()
+                ? $daySchedules->filter(fn ($cs) => $cs->end_time > $nowTime)->values()
                 : $daySchedules;
 
             if ($r->status !== 'available') {
                 $badgeClass = 'badge-rose';
                 $badgeLabel = 'Perbaikan';
+                $isBusyNow = true;
+            } elseif ($coverage['is_full']) {
+                $badgeClass = 'badge-rose';
+                $badgeLabel = 'Penuh';
                 $isBusyNow = true;
             } elseif ($activeBookingNow) {
                 $badgeClass = 'badge-amber';
@@ -87,14 +222,14 @@ class RoomReserveController extends Controller
                 $badgeClass = 'badge-royal';
                 $badgeLabel = "Dipakai Kuliah ({$activeClassNow->start_time}–{$activeClassNow->end_time} WIB)";
                 $isBusyNow = true;
-            } elseif (!$isToday && $relevantApproved->isNotEmpty()) {
+            } elseif (! $isToday && $relevantApproved->isNotEmpty()) {
                 $first = $relevantApproved->first();
                 $badgeClass = 'badge-amber';
                 $badgeLabel = $relevantApproved->count() === 1
                     ? "Dipinjam ({$first->start_time}–{$first->end_time} WIB)"
                     : "Dipinjam ({$relevantApproved->count()} jadwal)";
                 $isBusyNow = false;
-            } elseif (!$isToday && $relevantSchedules->isNotEmpty()) {
+            } elseif (! $isToday && $relevantSchedules->isNotEmpty()) {
                 $firstCs = $relevantSchedules->first();
                 $badgeClass = 'badge-royal';
                 $badgeLabel = $relevantSchedules->count() === 1
@@ -108,25 +243,57 @@ class RoomReserveController extends Controller
             }
 
             $roomStatuses[$r->id] = [
-                'badge_class'    => $badgeClass,
-                'badge_label'    => $badgeLabel,
-                'is_busy_now'    => $isBusyNow,
+                'badge_class' => $badgeClass,
+                'badge_label' => $badgeLabel,
+                'is_busy_now' => $isBusyNow,
+                'is_full' => $coverage['is_full'],
+                'is_full_approved' => $coverage['is_full_approved'],
                 'active_booking' => $activeBookingNow,
-                'active_class'   => $activeClassNow,
+                'active_class' => $activeClassNow,
                 'approved_slots' => $relevantApproved,
-                'class_slots'    => $relevantSchedules,
+                'class_slots' => $relevantSchedules,
             ];
         }
+
+        $operationalStartSlots = self::operationalStartSlots();
+        $operationalEndSlots = self::operationalEndSlots();
+
+        $userNotifications = collect();
+        $unreadNotifCount = 0;
+        if (Auth::check()) {
+            try {
+                if (! Schema::hasTable('user_notifications')) {
+                    Artisan::call('migrate', ['--force' => true]);
+                }
+                $userNotifications = UserNotification::where('user_id', Auth::id())
+                    ->orderByDesc('id')
+                    ->limit(50)
+                    ->get();
+                $unreadNotifCount = $userNotifications->where('is_read', false)->count();
+            } catch (\Throwable $e) {
+                $userNotifications = collect();
+                $unreadNotifCount = 0;
+            }
+        }
+
+        $dailySchedules = $allSchedules
+            ->filter(fn ($cs) => $cs->schedule_date === $selectedDate)
+            ->values();
 
         return compact(
             'allRooms',
             'allSchedules',
+            'dailySchedules',
             'allReservations',
             'today',
             'nowTime',
             'selectedDate',
             'isToday',
-            'roomStatuses'
+            'roomStatuses',
+            'operationalStartSlots',
+            'operationalEndSlots',
+            'userNotifications',
+            'unreadNotifCount'
         );
     }
 
@@ -154,14 +321,14 @@ class RoomReserveController extends Controller
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['myLectures'] = ClassSchedule::with('room')
             ->where('lecturer_id', Auth::id())
-            ->orderBy('schedule_date')
+            ->where('schedule_date', $data['selectedDate'])
             ->orderBy('start_time')
             ->get();
 
         $data['dosenApprovals'] = Reservation::with(['room.building', 'requester', 'approval.approver'])
             ->whereHas('approval', function ($q) {
                 $q->where('approver_type', 'DOSEN')
-                  ->where('approver_id', Auth::id());
+                    ->where('approver_id', Auth::id());
             })
             ->orderByDesc('id')
             ->get();
@@ -182,14 +349,14 @@ class RoomReserveController extends Controller
         $data = $this->sharedViewData($request);
         $data['tab'] = $request->query('tab', 'dashboard');
         $data['myManagedLabs'] = Room::with('building')
-            ->whereHas('labManager', fn($q) => $q->where('user_id', Auth::id()))
+            ->whereHas('labManager', fn ($q) => $q->where('user_id', Auth::id()))
             ->orderBy('room_code')
             ->get();
 
         $data['kalabApprovals'] = Reservation::with(['room.building', 'requester', 'approval.approver'])
             ->whereHas('approval', function ($q) {
                 $q->where('approver_type', 'KALAB')
-                  ->where('approver_id', Auth::id());
+                    ->where('approver_id', Auth::id());
             })
             ->orderByDesc('id')
             ->get();
@@ -389,7 +556,7 @@ class RoomReserveController extends Controller
             ->where('status', 'MENUNGGU')
             ->orderByDesc('id')
             ->get();
-        $data['gktRooms'] = $data['allRooms']->filter(fn($r) => $r->building->name === 'GKT');
+        $data['gktRooms'] = $data['allRooms']->filter(fn ($r) => $r->building->name === 'GKT');
         $data['courseOptions'] = $this->courseOptions();
         $data['classOptions'] = $this->classOptions();
         $data['roomNameOptions'] = $this->roomNameOptions();
@@ -424,21 +591,21 @@ class RoomReserveController extends Controller
     public function storeReservation(Request $request)
     {
         $request->validate([
-            'room_id'          => 'required|exists:rooms,id',
+            'room_id' => 'required|exists:rooms,id',
             'reservation_date' => 'required|date',
-            'start_time'       => 'required|string',
-            'end_time'         => 'required|string',
-            'purpose'          => 'required|string|max:500',
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
+            'purpose' => 'required|string|max:500',
         ]);
 
         $roomId = (int) $request->input('room_id');
         $date = $request->input('reservation_date');
-        $startTime = $request->input('start_time');
-        $endTime = $request->input('end_time');
+        $startTime = trim($request->input('start_time'));
+        $endTime = trim($request->input('end_time'));
         $purpose = trim($request->input('purpose'));
 
-        if ($startTime >= $endTime) {
-            return back()->with('error', 'Waktu mulai harus lebih awal daripada waktu selesai.');
+        if ($timeErr = $this->validateOperationalTime($startTime, $endTime)) {
+            return back()->with('error', $timeErr);
         }
 
         $room = Room::with(['building', 'labManager.kalab'])->findOrFail($roomId);
@@ -492,28 +659,28 @@ class RoomReserveController extends Controller
 
         DB::transaction(function () use ($room, $date, $startTime, $endTime, $purpose, $status, $approverId, $approverType) {
             $res = Reservation::create([
-                'room_id'          => $room->id,
-                'requester_id'     => Auth::id(),
-                'purpose'          => $purpose,
+                'room_id' => $room->id,
+                'requester_id' => Auth::id(),
+                'purpose' => $purpose,
                 'reservation_date' => $date,
-                'start_time'       => $startTime,
-                'end_time'         => $endTime,
-                'status'           => $status,
-                'submitted_at'     => now(),
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'status' => $status,
+                'submitted_at' => now(),
             ]);
 
             Approval::create([
                 'reservation_id' => $res->id,
-                'approver_id'    => $approverId,
-                'approver_type'  => $approverType,
-                'decision'       => 'MENUNGGU',
+                'approver_id' => $approverId,
+                'approver_type' => $approverType,
+                'decision' => 'MENUNGGU',
             ]);
 
             AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => "CREATE_RESERVATION ({$room->room_code} -> {$status})",
-                'entity'     => 'RESERVATIONS',
-                'entity_id'  => $res->id,
+                'user_id' => Auth::id(),
+                'action' => "CREATE_RESERVATION ({$room->room_code} -> {$status})",
+                'entity' => 'RESERVATIONS',
+                'entity_id' => $res->id,
                 'created_at' => now(),
             ]);
         });
@@ -527,26 +694,26 @@ class RoomReserveController extends Controller
             ->where('requester_id', Auth::id())
             ->firstOrFail();
 
-        if (!str_starts_with($reservation->status, 'MENUNGGU')) {
+        if (! str_starts_with($reservation->status, 'MENUNGGU')) {
             return back()->with('error', 'Hanya pengajuan dengan status MENUNGGU yang dapat diubah.');
         }
 
         $request->validate([
-            'room_id'          => 'required|exists:rooms,id',
+            'room_id' => 'required|exists:rooms,id',
             'reservation_date' => 'required|date',
-            'start_time'       => 'required|string',
-            'end_time'         => 'required|string',
-            'purpose'          => 'required|string|max:500',
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
+            'purpose' => 'required|string|max:500',
         ]);
 
         $roomId = (int) $request->input('room_id');
         $date = $request->input('reservation_date');
-        $startTime = $request->input('start_time');
-        $endTime = $request->input('end_time');
+        $startTime = trim($request->input('start_time'));
+        $endTime = trim($request->input('end_time'));
         $purpose = trim($request->input('purpose'));
 
-        if ($startTime >= $endTime) {
-            return back()->with('error', 'Waktu mulai harus lebih awal daripada waktu selesai.');
+        if ($timeErr = $this->validateOperationalTime($startTime, $endTime)) {
+            return back()->with('error', $timeErr);
         }
 
         $conflict = Reservation::where('room_id', $roomId)
@@ -587,27 +754,27 @@ class RoomReserveController extends Controller
 
         DB::transaction(function () use ($reservation, $room, $date, $startTime, $endTime, $purpose, $status, $approverId, $approverType) {
             $reservation->update([
-                'room_id'          => $room->id,
-                'purpose'          => $purpose,
+                'room_id' => $room->id,
+                'purpose' => $purpose,
                 'reservation_date' => $date,
-                'start_time'       => $startTime,
-                'end_time'         => $endTime,
-                'status'           => $status,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'status' => $status,
             ]);
 
             $reservation->approval()->update([
-                'approver_id'   => $approverId,
+                'approver_id' => $approverId,
                 'approver_type' => $approverType,
-                'decision'      => 'MENUNGGU',
-                'notes'         => null,
-                'decided_at'    => null,
+                'decision' => 'MENUNGGU',
+                'notes' => null,
+                'decided_at' => null,
             ]);
 
             AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => "UPDATE_RESERVATION (#RR-{$reservation->id})",
-                'entity'     => 'RESERVATIONS',
-                'entity_id'  => $reservation->id,
+                'user_id' => Auth::id(),
+                'action' => "UPDATE_RESERVATION (#RR-{$reservation->id})",
+                'entity' => 'RESERVATIONS',
+                'entity_id' => $reservation->id,
                 'created_at' => now(),
             ]);
         });
@@ -621,7 +788,7 @@ class RoomReserveController extends Controller
             ->where('requester_id', Auth::id())
             ->firstOrFail();
 
-        if (!str_starts_with($reservation->status, 'MENUNGGU')) {
+        if (! str_starts_with($reservation->status, 'MENUNGGU')) {
             return back()->with('error', 'Hanya pengajuan dengan status MENUNGGU yang dapat dibatalkan.');
         }
 
@@ -631,15 +798,15 @@ class RoomReserveController extends Controller
             $reservation->delete();
 
             AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => "CANCEL_RESERVATION (#RR-{$resId})",
-                'entity'     => 'RESERVATIONS',
-                'entity_id'  => $resId,
+                'user_id' => Auth::id(),
+                'action' => "CANCEL_RESERVATION (#RR-{$resId})",
+                'entity' => 'RESERVATIONS',
+                'entity_id' => $resId,
                 'created_at' => now(),
             ]);
         });
 
-        return back()->with('success', "Pengajuan peminjaman berhasil dibatalkan.");
+        return back()->with('success', 'Pengajuan peminjaman berhasil dibatalkan.');
     }
 
     // =========================================================================
@@ -649,8 +816,8 @@ class RoomReserveController extends Controller
     {
         $request->validate([
             'reservation_id' => 'required|exists:reservations,id',
-            'decision'       => 'required|in:DISETUJUI,DITOLAK',
-            'notes'          => 'nullable|string',
+            'decision' => 'required|in:DISETUJUI,DITOLAK',
+            'notes' => 'nullable|string',
         ]);
 
         $decision = $request->input('decision');
@@ -690,21 +857,53 @@ class RoomReserveController extends Controller
 
         $finalNotes = $notes !== '' ? $notes : 'Disetujui.';
 
-        DB::transaction(function () use ($reservation, $user, $decision, $finalNotes) {
+        $processorLabel = match ($user->role) {
+            'baak' => 'Admin BAAK',
+            'dosen' => "Dosen Pengampu ({$user->full_name})",
+            'kalab' => "Kepala Laboratorium ({$user->full_name})",
+            default => $user->full_name,
+        };
+
+        DB::transaction(function () use ($reservation, $user, $decision, $finalNotes, $notes, $processorLabel) {
             $reservation->update(['status' => $decision]);
 
             $reservation->approval()->update([
                 'approver_id' => $user->id,
-                'decision'    => $decision,
-                'notes'       => $finalNotes,
-                'decided_at'  => now(),
+                'decision' => $decision,
+                'notes' => $finalNotes,
+                'decided_at' => now(),
             ]);
 
+            if (! Schema::hasTable('user_notifications')) {
+                Artisan::call('migrate', ['--force' => true]);
+            }
+
+            if ($decision === 'DISETUJUI') {
+                $extraNote = ($notes !== '' && ! str_starts_with($notes, 'Disetujui')) ? " Catatan: {$finalNotes}" : '';
+                UserNotification::create([
+                    'user_id' => $reservation->requester_id,
+                    'reservation_id' => $reservation->id,
+                    'type' => 'approved',
+                    'title' => 'Peminjaman ruangan disetujui',
+                    'message' => "Peminjaman ruangan {$reservation->room->room_code} ({$reservation->room->room_name}) pada {$reservation->reservation_date} ({$reservation->start_time}–{$reservation->end_time} WIB) telah disetujui oleh {$processorLabel}.{$extraNote}",
+                    'is_read' => false,
+                ]);
+            } else {
+                UserNotification::create([
+                    'user_id' => $reservation->requester_id,
+                    'reservation_id' => $reservation->id,
+                    'type' => 'rejected',
+                    'title' => 'Peminjaman ruangan ditolak',
+                    'message' => "Peminjaman ruangan {$reservation->room->room_code} ({$reservation->room->room_name}) pada {$reservation->reservation_date} ({$reservation->start_time}–{$reservation->end_time} WIB) ditolak oleh {$processorLabel}. Alasan: {$finalNotes}",
+                    'is_read' => false,
+                ]);
+            }
+
             AuditLog::create([
-                'user_id'    => $user->id,
-                'action'     => "{$decision}_RESERVATION ({$reservation->room->room_code})",
-                'entity'     => 'APPROVALS',
-                'entity_id'  => $reservation->id,
+                'user_id' => $user->id,
+                'action' => "{$decision}_RESERVATION ({$reservation->room->room_code})",
+                'entity' => 'APPROVALS',
+                'entity_id' => $reservation->id,
                 'created_at' => now(),
             ]);
         });
@@ -712,9 +911,52 @@ class RoomReserveController extends Controller
         return back()->with(
             'success',
             $decision === 'DISETUJUI'
-                ? "Peminjaman {$reservation->room->room_code} berhasil DISETUJUI dan masuk ke Kalender Ruangan."
-                : "Peminjaman {$reservation->room->room_code} telah DITOLAK."
+                ? "Peminjaman {$reservation->room->room_code} berhasil DISETUJUI dan notifikasi telah dikirim ke peminjam."
+                : "Peminjaman {$reservation->room->room_code} telah DITOLAK dan notifikasi telah dikirim ke peminjam."
         );
+    }
+
+    public function markNotificationsRead(Request $request)
+    {
+        if (Schema::hasTable('user_notifications')) {
+            UserNotification::where('user_id', Auth::id())
+                ->where('is_read', false)
+                ->update(['is_read' => true]);
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return back();
+    }
+
+    public function destroyNotification(Request $request, $id)
+    {
+        if (Schema::hasTable('user_notifications')) {
+            UserNotification::where('id', $id)
+                ->where('user_id', Auth::id())
+                ->delete();
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return back()->with('success', 'Notifikasi berhasil dihapus.');
+    }
+
+    public function destroyAllNotifications(Request $request)
+    {
+        if (Schema::hasTable('user_notifications')) {
+            UserNotification::where('user_id', Auth::id())->delete();
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['ok' => true]);
+        }
+
+        return back()->with('success', 'Seluruh notifikasi berhasil dihapus.');
     }
 
     // =========================================================================
@@ -723,36 +965,155 @@ class RoomReserveController extends Controller
     public function storeSchedule(Request $request)
     {
         $request->validate([
-            'room_id'       => 'required|exists:rooms,id',
-            'lecturer_id'   => 'required|exists:users,id',
-            'course_name'   => 'required|string|max:150',
-            'class_name'    => 'nullable|string|max:60',
+            'room_id' => 'required|exists:rooms,id',
+            'lecturer_id' => 'required|exists:users,id',
+            'course_name' => 'required|string|max:150',
+            'class_name' => 'nullable|string|max:60',
             'schedule_date' => 'required|date',
-            'start_time'    => 'required|string',
-            'end_time'      => 'required|string',
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
+            'repeat_days' => 'nullable|array',
+            'repeat_days.*' => 'integer|between:1,7',
+            'repeat_weeks' => 'nullable|integer|min:1|max:24',
         ]);
+
+        $startTime = trim($request->input('start_time'));
+        $endTime = trim($request->input('end_time'));
+
+        if ($timeErr = $this->validateOperationalTime($startTime, $endTime)) {
+            return redirect()->route('role.baak', ['tab' => 'schedules'])
+                ->with('error', $timeErr);
+        }
+
+        $roomId = (int) $request->input('room_id');
+        $lecturerId = (int) $request->input('lecturer_id');
+        $courseName = trim($request->input('course_name'));
+        $className = $request->filled('class_name') ? trim($request->input('class_name')) : null;
+        $baseDate = $request->input('schedule_date');
+        $label = $className ? "{$courseName} ({$className})" : $courseName;
+
+        $selectedDays = collect($request->input('repeat_days', []))
+            ->map(fn ($d) => (int) $d)
+            ->filter(fn ($d) => $d >= 1 && $d <= 7)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $dayMap = [
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+        ];
+
+        // Jika tombol hari (Senin - Minggu) dinyalakan -> generate otomatis setiap hari yang dipilih
+        if (! empty($selectedDays)) {
+            $repeatWeeks = (int) $request->input('repeat_weeks', 16);
+            $startCursor = Carbon::parse($baseDate)->startOfDay();
+            $endCursor = $startCursor->copy()->addWeeks($repeatWeeks)->subDay();
+
+            $createdCount = 0;
+            $firstCreatedId = 0;
+            $firstCreatedDate = $baseDate;
+
+            DB::transaction(function () use (
+                $startCursor,
+                $endCursor,
+                $selectedDays,
+                $roomId,
+                $lecturerId,
+                $courseName,
+                $className,
+                $startTime,
+                $endTime,
+                &$createdCount,
+                &$firstCreatedId,
+                &$firstCreatedDate
+            ) {
+                $cursor = $startCursor->copy();
+                while ($cursor->lte($endCursor)) {
+                    if (in_array($cursor->dayOfWeekIso, $selectedDays, true)) {
+                        $dateStr = $cursor->format('Y-m-d');
+                        $existsConflict = ClassSchedule::where('room_id', $roomId)
+                            ->where('schedule_date', $dateStr)
+                            ->where('start_time', '<', $endTime)
+                            ->where('end_time', '>', $startTime)
+                            ->exists();
+
+                        if (! $existsConflict) {
+                            $sc = ClassSchedule::create([
+                                'room_id' => $roomId,
+                                'lecturer_id' => $lecturerId,
+                                'course_name' => $courseName,
+                                'class_name' => $className,
+                                'schedule_date' => $dateStr,
+                                'start_time' => $startTime,
+                                'end_time' => $endTime,
+                            ]);
+                            if ($firstCreatedId === 0) {
+                                $firstCreatedId = $sc->id;
+                                $firstCreatedDate = $dateStr;
+                            }
+                            $createdCount++;
+                        }
+                    }
+                    $cursor->addDay();
+                }
+            });
+
+            if ($createdCount === 0) {
+                return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $baseDate])
+                    ->with('error', 'Tidak ada jadwal baru yang dibuat karena jam tersebut sudah terisi pada hari yang dipilih.');
+            }
+
+            $dayNamesText = implode(', ', array_map(fn ($d) => $dayMap[$d], $selectedDays));
+
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => "CREATE_RECURRING_SCHEDULE ({$label} — {$dayNamesText}, {$createdCount}x)",
+                'entity' => 'CLASS_SCHEDULES',
+                'entity_id' => $firstCreatedId ?: 1,
+                'created_at' => now(),
+            ]);
+
+            return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $firstCreatedDate])
+                ->with('success', "Jadwal kuliah \"{$label}\" berhasil dijadwalkan otomatis setiap hari {$dayNamesText} ({$createdCount} pertemuan dibuat). Menampilkan jadwal tanggal {$firstCreatedDate}.");
+        }
+
+        $existsSingleConflict = ClassSchedule::where('room_id', $roomId)
+            ->where('schedule_date', $baseDate)
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->exists();
+
+        if ($existsSingleConflict) {
+            return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $baseDate])
+                ->with('error', 'Ruangan tersebut sudah memiliki jadwal kuliah lain pada tanggal dan jam yang dipilih.');
+        }
 
         $schedule = ClassSchedule::create([
-            'room_id'       => $request->input('room_id'),
-            'lecturer_id'   => $request->input('lecturer_id'),
-            'course_name'   => trim($request->input('course_name')),
-            'class_name'    => $request->filled('class_name') ? trim($request->input('class_name')) : null,
-            'schedule_date' => $request->input('schedule_date'),
-            'start_time'    => $request->input('start_time'),
-            'end_time'      => $request->input('end_time'),
+            'room_id' => $roomId,
+            'lecturer_id' => $lecturerId,
+            'course_name' => $courseName,
+            'class_name' => $className,
+            'schedule_date' => $baseDate,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
         ]);
 
-        $label = $schedule->class_name ? "{$schedule->course_name} ({$schedule->class_name})" : $schedule->course_name;
-
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "CREATE_CLASS_SCHEDULE ({$label})",
-            'entity'     => 'CLASS_SCHEDULES',
-            'entity_id'  => $schedule->id,
+            'user_id' => Auth::id(),
+            'action' => "CREATE_CLASS_SCHEDULE ({$label})",
+            'entity' => 'CLASS_SCHEDULES',
+            'entity_id' => $schedule->id,
             'created_at' => now(),
         ]);
 
-        return redirect()->route('role.baak', ['tab' => 'schedules'])
+        return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $baseDate])
             ->with('success', "Jadwal kuliah \"{$label}\" berhasil ditambahkan.");
     }
 
@@ -761,36 +1122,44 @@ class RoomReserveController extends Controller
         $schedule = ClassSchedule::findOrFail($id);
 
         $request->validate([
-            'room_id'       => 'required|exists:rooms,id',
-            'lecturer_id'   => 'required|exists:users,id',
-            'course_name'   => 'required|string|max:150',
-            'class_name'    => 'nullable|string|max:60',
+            'room_id' => 'required|exists:rooms,id',
+            'lecturer_id' => 'required|exists:users,id',
+            'course_name' => 'required|string|max:150',
+            'class_name' => 'nullable|string|max:60',
             'schedule_date' => 'required|date',
-            'start_time'    => 'required|string',
-            'end_time'      => 'required|string',
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
         ]);
 
+        $startTime = trim($request->input('start_time'));
+        $endTime = trim($request->input('end_time'));
+
+        if ($timeErr = $this->validateOperationalTime($startTime, $endTime)) {
+            return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $schedule->schedule_date])
+                ->with('error', $timeErr);
+        }
+
         $schedule->update([
-            'room_id'       => $request->input('room_id'),
-            'lecturer_id'   => $request->input('lecturer_id'),
-            'course_name'   => trim($request->input('course_name')),
-            'class_name'    => $request->filled('class_name') ? trim($request->input('class_name')) : null,
+            'room_id' => $request->input('room_id'),
+            'lecturer_id' => $request->input('lecturer_id'),
+            'course_name' => trim($request->input('course_name')),
+            'class_name' => $request->filled('class_name') ? trim($request->input('class_name')) : null,
             'schedule_date' => $request->input('schedule_date'),
-            'start_time'    => $request->input('start_time'),
-            'end_time'      => $request->input('end_time'),
+            'start_time' => $startTime,
+            'end_time' => $endTime,
         ]);
 
         $label = $schedule->class_name ? "{$schedule->course_name} ({$schedule->class_name})" : $schedule->course_name;
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "UPDATE_CLASS_SCHEDULE ({$label})",
-            'entity'     => 'CLASS_SCHEDULES',
-            'entity_id'  => $schedule->id,
+            'user_id' => Auth::id(),
+            'action' => "UPDATE_CLASS_SCHEDULE ({$label})",
+            'entity' => 'CLASS_SCHEDULES',
+            'entity_id' => $schedule->id,
             'created_at' => now(),
         ]);
 
-        return redirect()->route('role.baak', ['tab' => 'schedules'])
+        return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $schedule->schedule_date])
             ->with('success', "Jadwal kuliah \"{$label}\" berhasil diperbarui.");
     }
 
@@ -798,47 +1167,84 @@ class RoomReserveController extends Controller
     {
         $schedule = ClassSchedule::findOrFail($id);
         $courseName = $schedule->course_name;
+        $scheduleDate = $schedule->schedule_date;
         $scheduleId = $schedule->id;
         $schedule->delete();
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "DELETE_CLASS_SCHEDULE ({$courseName})",
-            'entity'     => 'CLASS_SCHEDULES',
-            'entity_id'  => $scheduleId,
+            'user_id' => Auth::id(),
+            'action' => "DELETE_CLASS_SCHEDULE ({$courseName})",
+            'entity' => 'CLASS_SCHEDULES',
+            'entity_id' => $scheduleId,
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('role.baak', ['tab' => 'schedules', 'date' => $scheduleDate])
+            ->with('success', "Jadwal kuliah \"{$courseName}\" berhasil dihapus.");
+    }
+
+    public function destroyScheduleSeries(Request $request)
+    {
+        $request->validate([
+            'room_id' => 'required|integer',
+            'course_name' => 'required|string',
+            'start_time' => 'required|string',
+            'end_time' => 'required|string',
+        ]);
+
+        $className = $request->input('class_name');
+        $query = ClassSchedule::where('room_id', (int) $request->input('room_id'))
+            ->where('course_name', $request->input('course_name'))
+            ->where('start_time', $request->input('start_time'))
+            ->where('end_time', $request->input('end_time'));
+
+        if ($className !== null && $className !== '') {
+            $query->where('class_name', $className);
+        } else {
+            $query->whereNull('class_name');
+        }
+
+        $deleted = $query->delete();
+        $label = $className ? "{$request->input('course_name')} ({$className})" : $request->input('course_name');
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => "DELETE_SCHEDULE_SERIES ({$label} — {$deleted}x)",
+            'entity' => 'CLASS_SCHEDULES',
+            'entity_id' => (int) $request->input('room_id'),
             'created_at' => now(),
         ]);
 
         return redirect()->route('role.baak', ['tab' => 'schedules'])
-            ->with('success', "Jadwal kuliah \"{$courseName}\" berhasil dihapus.");
+            ->with('success', "Seluruh jadwal seri \"{$label}\" ({$deleted} pertemuan) berhasil dihapus.");
     }
 
     public function storeRoom(Request $request)
     {
         $request->validate([
             'building_id' => 'required|exists:buildings,id',
-            'floor'       => 'required|integer|min:1|max:10',
-            'room_code'   => 'required|string|max:50|unique:rooms,room_code',
-            'room_name'   => 'required|string|max:150',
-            'room_type'   => 'required|string|max:100',
-            'capacity'    => 'required|integer|min:1',
+            'floor' => 'required|integer|min:1|max:10',
+            'room_code' => 'required|string|max:50|unique:rooms,room_code',
+            'room_name' => 'required|string|max:150',
+            'room_type' => 'required|string|max:100',
+            'capacity' => 'required|integer|min:1',
         ]);
 
         $room = Room::create([
             'building_id' => $request->input('building_id'),
-            'floor'       => $request->input('floor'),
-            'room_code'   => strtoupper(trim($request->input('room_code'))),
-            'room_name'   => trim($request->input('room_name')),
-            'room_type'   => trim($request->input('room_type')),
-            'capacity'    => (int) $request->input('capacity'),
-            'status'      => 'available',
+            'floor' => $request->input('floor'),
+            'room_code' => strtoupper(trim($request->input('room_code'))),
+            'room_name' => trim($request->input('room_name')),
+            'room_type' => trim($request->input('room_type')),
+            'capacity' => (int) $request->input('capacity'),
+            'status' => 'available',
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "CREATE_ROOM ({$room->room_code})",
-            'entity'     => 'ROOMS',
-            'entity_id'  => $room->id,
+            'user_id' => Auth::id(),
+            'action' => "CREATE_ROOM ({$room->room_code})",
+            'entity' => 'ROOMS',
+            'entity_id' => $room->id,
             'created_at' => now(),
         ]);
 
@@ -853,17 +1259,17 @@ class RoomReserveController extends Controller
         $request->validate([
             'room_name' => 'required|string|max:150',
             'room_type' => 'required|string|max:100',
-            'capacity'  => 'required|integer|min:1',
-            'status'    => 'required|in:available,maintenance',
+            'capacity' => 'required|integer|min:1',
+            'status' => 'required|in:available,maintenance',
         ]);
 
         $room->update($request->only(['room_name', 'room_type', 'capacity', 'status']));
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "UPDATE_ROOM ({$room->room_code})",
-            'entity'     => 'ROOMS',
-            'entity_id'  => $room->id,
+            'user_id' => Auth::id(),
+            'action' => "UPDATE_ROOM ({$room->room_code})",
+            'entity' => 'ROOMS',
+            'entity_id' => $room->id,
             'created_at' => now(),
         ]);
 
@@ -887,10 +1293,10 @@ class RoomReserveController extends Controller
         $room->delete();
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "DELETE_ROOM ({$code})",
-            'entity'     => 'ROOMS',
-            'entity_id'  => $roomId,
+            'user_id' => Auth::id(),
+            'action' => "DELETE_ROOM ({$code})",
+            'entity' => 'ROOMS',
+            'entity_id' => $roomId,
             'created_at' => now(),
         ]);
 
@@ -905,10 +1311,10 @@ class RoomReserveController extends Controller
         $room->update(['status' => $newStatus]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "UPDATE_ROOM_STATUS ({$room->room_code} -> {$newStatus})",
-            'entity'     => 'ROOMS',
-            'entity_id'  => $room->id,
+            'user_id' => Auth::id(),
+            'action' => "UPDATE_ROOM_STATUS ({$room->room_code} -> {$newStatus})",
+            'entity' => 'ROOMS',
+            'entity_id' => $room->id,
             'created_at' => now(),
         ]);
 
@@ -923,25 +1329,25 @@ class RoomReserveController extends Controller
     {
         $request->validate([
             'full_name' => 'required|string|max:120',
-            'email'     => 'required|email|unique:users,email',
-            'phone'     => 'nullable|string|max:30',
-            'password'  => 'required|string|min:4',
+            'email' => 'required|email|unique:users,email',
+            'phone' => 'nullable|string|max:30',
+            'password' => 'required|string|min:4',
         ]);
 
         $student = User::create([
-            'full_name'     => trim($request->input('full_name')),
-            'email'         => trim($request->input('email')),
-            'phone'         => $request->filled('phone') ? trim($request->input('phone')) : null,
+            'full_name' => trim($request->input('full_name')),
+            'email' => trim($request->input('email')),
+            'phone' => $request->filled('phone') ? trim($request->input('phone')) : null,
             'password_hash' => Hash::make($request->input('password')),
-            'role'          => 'mahasiswa',
-            'status'        => 'active',
+            'role' => 'mahasiswa',
+            'status' => 'active',
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "BAAK_CREATE_MAHASISWA ({$student->email})",
-            'entity'     => 'USERS',
-            'entity_id'  => $student->id,
+            'user_id' => Auth::id(),
+            'action' => "BAAK_CREATE_MAHASISWA ({$student->email})",
+            'entity' => 'USERS',
+            'entity_id' => $student->id,
             'created_at' => now(),
         ]);
 
@@ -955,21 +1361,21 @@ class RoomReserveController extends Controller
 
         $request->validate([
             'full_name' => 'required|string|max:120',
-            'status'    => 'required|in:active,inactive',
+            'status' => 'required|in:active,inactive',
         ]);
 
         // Keamanan Opsi B (Immutable Recovery Key):
         // Email, Nomor HP Terdaftar, dan Kata Sandi DIKUNCI di form Edit Akun agar tidak dapat dimanipulasi.
         $student->update([
             'full_name' => trim($request->input('full_name')),
-            'status'    => $request->input('status'),
+            'status' => $request->input('status'),
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "BAAK_UPDATE_MAHASISWA ({$student->email})",
-            'entity'     => 'USERS',
-            'entity_id'  => $student->id,
+            'user_id' => Auth::id(),
+            'action' => "BAAK_UPDATE_MAHASISWA ({$student->email})",
+            'entity' => 'USERS',
+            'entity_id' => $student->id,
             'created_at' => now(),
         ]);
 
@@ -990,10 +1396,10 @@ class RoomReserveController extends Controller
         $student->delete();
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "BAAK_DELETE_MAHASISWA ({$name})",
-            'entity'     => 'USERS',
-            'entity_id'  => $studentId,
+            'user_id' => Auth::id(),
+            'action' => "BAAK_DELETE_MAHASISWA ({$name})",
+            'entity' => 'USERS',
+            'entity_id' => $studentId,
             'created_at' => now(),
         ]);
 
@@ -1012,13 +1418,13 @@ class RoomReserveController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$ticket) {
+        if (! $ticket) {
             return redirect()->route('role.baak', ['tab' => 'students'])
                 ->with('error', "Akses Ditolak: Kata sandi {$student->full_name} tidak dapat diubah karena belum ada permintaan reset kata sandi yang diajukan dari halaman Lupa Kata Sandi.");
         }
 
         $request->validate([
-            'password'           => 'required|string|min:4',
+            'password' => 'required|string|min:4',
             'verification_notes' => 'nullable|string|max:250',
         ]);
 
@@ -1031,17 +1437,17 @@ class RoomReserveController extends Controller
             ]);
 
             $ticket->update([
-                'status'        => 'SELESAI',
-                'handled_by'    => Auth::id(),
+                'status' => 'SELESAI',
+                'handled_by' => Auth::id(),
                 'handled_notes' => $verif,
-                'handled_at'    => now(),
+                'handled_at' => now(),
             ]);
 
             AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => "BAAK_RESET_PASSWORD_MAHASISWA (#PR-{$ticket->id} {$student->full_name} — {$verif})",
-                'entity'     => 'PASSWORD_RESET_REQUESTS',
-                'entity_id'  => $ticket->id,
+                'user_id' => Auth::id(),
+                'action' => "BAAK_RESET_PASSWORD_MAHASISWA (#PR-{$ticket->id} {$student->full_name} — {$verif})",
+                'entity' => 'PASSWORD_RESET_REQUESTS',
+                'entity_id' => $ticket->id,
                 'created_at' => now(),
             ]);
         });
@@ -1059,23 +1465,23 @@ class RoomReserveController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$ticket) {
+        if (! $ticket) {
             return redirect()->route('role.baak', ['tab' => 'students'])
                 ->with('error', 'Tidak ditemukan permintaan reset kata sandi yang aktif.');
         }
 
         $ticket->update([
-            'status'        => 'DITOLAK',
-            'handled_by'    => Auth::id(),
+            'status' => 'DITOLAK',
+            'handled_by' => Auth::id(),
             'handled_notes' => 'Permintaan reset ditolak / dibatalkan oleh BAAK.',
-            'handled_at'    => now(),
+            'handled_at' => now(),
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "BAAK_REJECT_PASSWORD_RESET (#PR-{$ticket->id} {$student->email})",
-            'entity'     => 'PASSWORD_RESET_REQUESTS',
-            'entity_id'  => $ticket->id,
+            'user_id' => Auth::id(),
+            'action' => "BAAK_REJECT_PASSWORD_RESET (#PR-{$ticket->id} {$student->email})",
+            'entity' => 'PASSWORD_RESET_REQUESTS',
+            'entity_id' => $ticket->id,
             'created_at' => now(),
         ]);
 
@@ -1099,26 +1505,26 @@ class RoomReserveController extends Controller
 
         $request->validate([
             'full_name' => 'required|string|max:120',
-            'email'     => 'required|email|unique:users,email',
-            'phone'     => 'nullable|string|max:30',
-            'password'  => 'required|string|min:4',
-            'role'      => 'required|in:dosen,kalab,baak',
+            'email' => 'required|email|unique:users,email',
+            'phone' => 'nullable|string|max:30',
+            'password' => 'required|string|min:4',
+            'role' => 'required|in:dosen,kalab,baak',
         ]);
 
         $newUser = User::create([
-            'full_name'     => $request->input('full_name'),
-            'email'         => $request->input('email'),
-            'phone'         => $request->filled('phone') ? trim($request->input('phone')) : null,
+            'full_name' => $request->input('full_name'),
+            'email' => $request->input('email'),
+            'phone' => $request->filled('phone') ? trim($request->input('phone')) : null,
             'password_hash' => Hash::make($request->input('password')),
-            'role'          => $request->input('role'),
-            'status'        => 'active',
+            'role' => $request->input('role'),
+            'status' => 'active',
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "CREATE_USER ({$newUser->email} as {$newUser->role})",
-            'entity'     => 'USERS',
-            'entity_id'  => $newUser->id,
+            'user_id' => Auth::id(),
+            'action' => "CREATE_USER ({$newUser->email} as {$newUser->role})",
+            'entity' => 'USERS',
+            'entity_id' => $newUser->id,
             'created_at' => now(),
         ]);
 
@@ -1139,23 +1545,23 @@ class RoomReserveController extends Controller
 
         $request->validate([
             'full_name' => 'required|string|max:120',
-            'role'      => 'required|in:dosen,kalab,baak',
-            'status'    => 'required|in:active,inactive',
+            'role' => 'required|in:dosen,kalab,baak',
+            'status' => 'required|in:active,inactive',
         ]);
 
         // Keamanan Opsi B (Immutable Recovery Key):
         // Email, Nomor HP Terdaftar, dan Kata Sandi DIKUNCI di form Edit Akun agar tidak dapat dimanipulasi.
         $user->update([
             'full_name' => trim($request->input('full_name')),
-            'role'      => $request->input('role'),
-            'status'    => $request->input('status'),
+            'role' => $request->input('role'),
+            'status' => $request->input('status'),
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "UPDATE_USER ({$user->email})",
-            'entity'     => 'USERS',
-            'entity_id'  => $user->id,
+            'user_id' => Auth::id(),
+            'action' => "UPDATE_USER ({$user->email})",
+            'entity' => 'USERS',
+            'entity_id' => $user->id,
             'created_at' => now(),
         ]);
 
@@ -1166,7 +1572,7 @@ class RoomReserveController extends Controller
     {
         $user = User::findOrFail($id);
 
-        if (!in_array($user->role, ['dosen', 'kalab', 'baak'], true)) {
+        if (! in_array($user->role, ['dosen', 'kalab', 'baak'], true)) {
             return back()->with('error', 'Administrator hanya dapat memperbarui kata sandi untuk akun Dosen, Kalab, atau BAAK.');
         }
 
@@ -1177,7 +1583,7 @@ class RoomReserveController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$ticket) {
+        if (! $ticket) {
             return back()->with(
                 'error',
                 "Akses Ditolak: Kata sandi {$user->full_name} tidak dapat diubah karena pengguna tidak mengajukan permintaan reset dari halaman Lupa Kata Sandi."
@@ -1196,17 +1602,17 @@ class RoomReserveController extends Controller
             ]);
 
             $ticket->update([
-                'status'        => 'SELESAI',
-                'handled_by'    => Auth::id(),
+                'status' => 'SELESAI',
+                'handled_by' => Auth::id(),
                 'handled_notes' => 'Password diperbarui oleh Administrator sesuai tiket konfirmasi WA.',
-                'handled_at'    => now(),
+                'handled_at' => now(),
             ]);
 
             AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => "ADMIN_RESET_PASSWORD_STAFF (#PR-{$ticket->id} {$user->full_name} via Konfirmasi WA)",
-                'entity'     => 'PASSWORD_RESET_REQUESTS',
-                'entity_id'  => $ticket->id,
+                'user_id' => Auth::id(),
+                'action' => "ADMIN_RESET_PASSWORD_STAFF (#PR-{$ticket->id} {$user->full_name} via Konfirmasi WA)",
+                'entity' => 'PASSWORD_RESET_REQUESTS',
+                'entity_id' => $ticket->id,
                 'created_at' => now(),
             ]);
         });
@@ -1226,22 +1632,22 @@ class RoomReserveController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$ticket) {
+        if (! $ticket) {
             return back()->with('error', 'Tidak ditemukan permintaan reset kata sandi yang aktif.');
         }
 
         $ticket->update([
-            'status'        => 'DITOLAK',
-            'handled_by'    => Auth::id(),
+            'status' => 'DITOLAK',
+            'handled_by' => Auth::id(),
             'handled_notes' => 'Permintaan reset ditolak / dibatalkan oleh Administrator.',
-            'handled_at'    => now(),
+            'handled_at' => now(),
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "ADMIN_REJECT_PASSWORD_RESET (#PR-{$ticket->id} {$user->email})",
-            'entity'     => 'PASSWORD_RESET_REQUESTS',
-            'entity_id'  => $ticket->id,
+            'user_id' => Auth::id(),
+            'action' => "ADMIN_REJECT_PASSWORD_RESET (#PR-{$ticket->id} {$user->email})",
+            'entity' => 'PASSWORD_RESET_REQUESTS',
+            'entity_id' => $ticket->id,
             'created_at' => now(),
         ]);
 
@@ -1269,10 +1675,10 @@ class RoomReserveController extends Controller
         $user->delete();
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "DELETE_USER ({$name})",
-            'entity'     => 'USERS',
-            'entity_id'  => $userId,
+            'user_id' => Auth::id(),
+            'action' => "DELETE_USER ({$name})",
+            'entity' => 'USERS',
+            'entity_id' => $userId,
             'created_at' => now(),
         ]);
 
@@ -1282,7 +1688,7 @@ class RoomReserveController extends Controller
     public function assignKalab(Request $request)
     {
         $request->validate([
-            'room_id'  => 'required|exists:rooms,id',
+            'room_id' => 'required|exists:rooms,id',
             'kalab_id' => 'required|exists:users,id',
         ]);
 
@@ -1292,10 +1698,10 @@ class RoomReserveController extends Controller
         );
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => "ASSIGN_KALAB (Room #{$request->input('room_id')} -> User #{$request->input('kalab_id')})",
-            'entity'     => 'LAB_MANAGERS',
-            'entity_id'  => (int) $request->input('room_id'),
+            'user_id' => Auth::id(),
+            'action' => "ASSIGN_KALAB (Room #{$request->input('room_id')} -> User #{$request->input('kalab_id')})",
+            'entity' => 'LAB_MANAGERS',
+            'entity_id' => (int) $request->input('room_id'),
             'created_at' => now(),
         ]);
 
@@ -1313,11 +1719,13 @@ class RoomReserveController extends Controller
         $data['profileUser'] = $user;
 
         $data['myManagedLabs'] = $user->role === 'kalab'
-            ? Room::with('building')->whereHas('labManager', fn($q) => $q->where('user_id', $user->id))->orderBy('room_code')->get()
+            ? Room::with('building')->whereHas('labManager', fn ($q) => $q->where('user_id', $user->id))->orderBy('room_code')->get()
             : collect();
 
         $data['myTeachingCount'] = $user->role === 'dosen'
-            ? ClassSchedule::where('lecturer_id', $user->id)->count()
+            ? ClassSchedule::where('lecturer_id', $user->id)
+                ->where('schedule_date', $data['today'])
+                ->count()
             : 0;
 
         $data['myReservationCount'] = Reservation::where('requester_id', $user->id)->count();
@@ -1338,15 +1746,15 @@ class RoomReserveController extends Controller
             'avatar' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
         ], [
             'avatar.required' => 'Pilih file gambar terlebih dahulu.',
-            'avatar.image'    => 'File harus berupa gambar (JPG, PNG, atau WebP).',
-            'avatar.max'      => 'Ukuran foto profil maksimal 2 MB.',
+            'avatar.image' => 'File harus berupa gambar (JPG, PNG, atau WebP).',
+            'avatar.max' => 'Ukuran foto profil maksimal 2 MB.',
         ]);
 
         $user = Auth::user();
         $file = $request->file('avatar');
         $uploadDir = public_path('uploads/avatars');
 
-        if (!is_dir($uploadDir)) {
+        if (! is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
 
@@ -1357,18 +1765,18 @@ class RoomReserveController extends Controller
             }
         }
 
-        $filename = 'user_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $filename = 'user_'.$user->id.'_'.time().'.'.$file->getClientOriginalExtension();
         $file->move($uploadDir, $filename);
 
         $user->update([
-            'avatar' => '/uploads/avatars/' . $filename,
+            'avatar' => '/uploads/avatars/'.$filename,
         ]);
 
         AuditLog::create([
-            'user_id'    => $user->id,
-            'action'     => "UPDATE_PROFILE_AVATAR ({$user->email})",
-            'entity'     => 'USERS',
-            'entity_id'  => $user->id,
+            'user_id' => $user->id,
+            'action' => "UPDATE_PROFILE_AVATAR ({$user->email})",
+            'entity' => 'USERS',
+            'entity_id' => $user->id,
             'created_at' => now(),
         ]);
 
@@ -1384,7 +1792,7 @@ class RoomReserveController extends Controller
         }
 
         $request->validate([
-            'phone'           => 'required|string|max:30',
+            'phone' => 'required|string|max:30',
             'requester_notes' => 'nullable|string|max:255',
         ], [
             'phone.required' => 'Konfirmasi Nomor HP Terdaftar wajib diisi.',
@@ -1392,7 +1800,8 @@ class RoomReserveController extends Controller
 
         $normalize = function (?string $p): string {
             $d = preg_replace('/[^0-9]/', '', (string) $p);
-            return str_starts_with($d, '62') ? '0' . substr($d, 2) : $d;
+
+            return str_starts_with($d, '62') ? '0'.substr($d, 2) : $d;
         };
 
         $inputPhone = $normalize($request->input('phone'));
@@ -1414,24 +1823,24 @@ class RoomReserveController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$ticket) {
+        if (! $ticket) {
             $ticket = PasswordResetRequest::create([
-                'user_id'         => $user->id,
+                'user_id' => $user->id,
                 'requested_email' => $user->email,
                 'requested_phone' => $user->phone,
                 'requester_notes' => $user->role === 'mahasiswa'
                     ? trim((string) $request->input('requester_notes'))
                     : 'Permohonan ubah kata sandi dari halaman Profil Saya (Konfirmasi WA)',
-                'target_handler'  => $targetHandler,
-                'status'          => 'MENUNGGU',
-                'requested_at'    => now(),
+                'target_handler' => $targetHandler,
+                'status' => 'MENUNGGU',
+                'requested_at' => now(),
             ]);
 
             AuditLog::create([
-                'user_id'    => $user->id,
-                'action'     => "PROFILE_REQUEST_PASSWORD_RESET (#PR-{$ticket->id} -> {$targetHandler})",
-                'entity'     => 'PASSWORD_RESET_REQUESTS',
-                'entity_id'  => $ticket->id,
+                'user_id' => $user->id,
+                'action' => "PROFILE_REQUEST_PASSWORD_RESET (#PR-{$ticket->id} -> {$targetHandler})",
+                'entity' => 'PASSWORD_RESET_REQUESTS',
+                'entity_id' => $ticket->id,
                 'created_at' => now(),
             ]);
         }
@@ -1441,10 +1850,10 @@ class RoomReserveController extends Controller
         }
 
         $waMessage = "Halo Administrator RoomReserve, saya mengajukan permohonan perubahan kata sandi dengan tiket *#PR-{$ticket->id}*.\n"
-            . "- Email: {$user->email}\n"
-            . "- Nomor HP Terdaftar: {$user->phone}\n"
-            . "Mohon bantuan pembaruan kata sandi akun saya. Terima kasih.";
-        $waUrl = 'https://wa.me/6281234567890?text=' . rawurlencode($waMessage);
+            ."- Email: {$user->email}\n"
+            ."- Nomor HP Terdaftar: {$user->phone}\n"
+            .'Mohon bantuan pembaruan kata sandi akun saya. Terima kasih.';
+        $waUrl = 'https://wa.me/6281234567890?text='.rawurlencode($waMessage);
 
         return back()
             ->with('success', "Permohonan perubahan kata sandi (#PR-{$ticket->id}) telah dikirim ke Administrator. Silakan lanjutkan konfirmasi via WhatsApp.")
@@ -1459,6 +1868,7 @@ class RoomReserveController extends Controller
         if ($admin) {
             Auth::login($admin);
         }
+
         return redirect()->route('role.admin')
             ->with('success', 'Database berhasil di-reset.');
     }
